@@ -722,6 +722,25 @@ function activeAbsencePeriodHtml(emp) {
   return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong></span>`;
 }
 
+/** Ohne das frisst iOS/Safari Touch-Züge, solange draggable="true" gesetzt ist. */
+function preferDashboardTouchDrag() {
+  try {
+    if (window.matchMedia("(pointer: coarse)").matches) return true;
+    if (window.matchMedia("(hover: none)").matches && navigator.maxTouchPoints > 0) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/** Nach jedem Neuaufbau: Touch-Geräte ohne natives HTML5-Ziehen auf den Chips. */
+function applyDashboardDragMode(root) {
+  const touch = preferDashboardTouchDrag();
+  root.querySelectorAll("[data-dashboard-employee]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = !touch;
+  });
+}
+
 function renderDashboard() {
   if (!state) return;
   const root = /** @type {HTMLElement} */ ($("#dashboard-content"));
@@ -892,6 +911,7 @@ function renderDashboard() {
       <div class="stats-grid">${statsItems || '<p class="hint">Keine verfügbaren Personen.</p>'}</div>
     </div>
   `;
+  applyDashboardDragMode(root);
 }
 
 function destroyGantt() {
@@ -1983,12 +2003,14 @@ function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
 function setupDashboardTouchDrag(view) {
   if (view.dataset.dashboardTouch === "1") return;
   view.dataset.dashboardTouch = "1";
-  const THRESH = 16;
-  /** @type {{ id: string | null; startX: number; startY: number; row: HTMLElement | null; active: boolean; touchId: number | null; moveDoc: ((ev: TouchEvent) => void) | null; endDoc: ((ev: TouchEvent) => void) | null }} */
+  const THRESH = 12;
+  /** @type {{ id: string | null; startX: number; startY: number; lastX: number; lastY: number; row: HTMLElement | null; active: boolean; touchId: number | null; moveDoc: ((ev: TouchEvent) => void) | null; endDoc: ((ev: TouchEvent) => void) | null }} */
   const st = {
     id: null,
     startX: 0,
     startY: 0,
+    lastX: 0,
+    lastY: 0,
     row: null,
     active: false,
     touchId: null,
@@ -2022,7 +2044,7 @@ function setupDashboardTouchDrag(view) {
   view.addEventListener(
     "touchstart",
     (ev) => {
-      if (st.id != null) return;
+      if (st.id != null) resetTouchDrag();
       const t = ev.targetTouches[0];
       if (!t) return;
       const row =
@@ -2034,12 +2056,16 @@ function setupDashboardTouchDrag(view) {
       st.touchId = t.identifier;
       st.startX = t.clientX;
       st.startY = t.clientY;
+      st.lastX = t.clientX;
+      st.lastY = t.clientY;
       st.row = row;
       st.active = false;
 
       const onMove = (e) => {
         const ti = [...e.touches].find((x) => x.identifier === st.touchId);
         if (!ti || st.id == null) return;
+        st.lastX = ti.clientX;
+        st.lastY = ti.clientY;
         const dx = ti.clientX - st.startX;
         const dy = ti.clientY - st.startY;
         if (!st.active) {
@@ -2056,20 +2082,28 @@ function setupDashboardTouchDrag(view) {
         const ti = [...e.changedTouches].find((x) => x.identifier === st.touchId);
         const pendingId = st.id;
         const wasActive = st.active;
+        const endX = ti ? ti.clientX : st.lastX;
+        const endY = ti ? ti.clientY : st.lastY;
+        const fallbackX = st.lastX;
+        const fallbackY = st.lastY;
+        if (wasActive) e.preventDefault();
         resetTouchDrag();
-        if (!pendingId || !wasActive || !ti || !state) return;
+        if (!pendingId || !wasActive || !state) return;
         await new Promise((r) => requestAnimationFrame(r));
-        const under = document.elementFromPoint(ti.clientX, ti.clientY);
+        let under = document.elementFromPoint(endX, endY);
+        if (!(under instanceof Element)) {
+          under = document.elementFromPoint(fallbackX, fallbackY);
+        }
         await dashboardHandleEmployeeDrop(pendingId, under instanceof Element ? under : null);
       };
 
       st.moveDoc = onMove;
       st.endDoc = onEnd;
       document.addEventListener("touchmove", onMove, { passive: false });
-      document.addEventListener("touchend", onEnd, { passive: true });
-      document.addEventListener("touchcancel", onEnd, { passive: true });
+      document.addEventListener("touchend", onEnd, { passive: false });
+      document.addEventListener("touchcancel", onEnd, { passive: false });
     },
-    { passive: true }
+    { capture: true, passive: true }
   );
 }
 
@@ -2077,6 +2111,15 @@ function setupDashboardDnD() {
   const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
   if (!view || view.dataset.dashboardDnd === "1") return;
   view.dataset.dashboardDnd = "1";
+
+  view.addEventListener(
+    "contextmenu",
+    (ev) => {
+      const t = ev.target instanceof Element ? ev.target.closest("[data-dashboard-employee]") : null;
+      if (t && preferDashboardTouchDrag()) ev.preventDefault();
+    },
+    { capture: true }
+  );
 
   view.addEventListener("dragstart", (ev) => {
     const path = ev.composedPath();

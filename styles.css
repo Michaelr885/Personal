@@ -270,6 +270,14 @@ code {
   margin-top: 0.35rem;
 }
 
+/* Finger-Zug: kein Browser-Scroll auf dem Chip; kein iOS-Callout/Markieren */
+#view-dashboard [data-dashboard-employee] {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .dashboard-emp-chip {
   display: flex;
   flex-direction: column;
@@ -335,6 +343,13 @@ code {
 
 #view-dashboard.dashboard-view--touch-drag {
   touch-action: none;
+}
+
+/* Beim Zug liegt der Finger auf dem Chip — sonst trifft elementFromPoint nur das Drag-Element */
+.dashboard-emp-chip.dashboard-emp-dragging,
+.card-team li.dashboard-emp-dragging {
+  pointer-events: none;
+  opacity: 0.88;
 }
 
 .card-team li[draggable="true"] {
