@@ -1968,7 +1968,139 @@ function renderDashboard() {
   applyDashboardDragMode(root);
 }
 
+/** Gantt: Projektnamen entlang des Balkens wiederholen (horizontal scrollbar). */
+/** @type {MutationObserver | null} */
+let ganttBarLabelRepeatObserver = null;
+/** @type {AbortController | null} */
+let ganttBarLabelRepeatAbort = null;
+let ganttBarLabelRepeatLayoutRaf = 0;
+
+function teardownProjectGanttBarLabelRepeats() {
+  if (ganttBarLabelRepeatObserver) {
+    ganttBarLabelRepeatObserver.disconnect();
+    ganttBarLabelRepeatObserver = null;
+  }
+  ganttBarLabelRepeatAbort?.abort();
+  ganttBarLabelRepeatAbort = null;
+  if (ganttBarLabelRepeatLayoutRaf) {
+    cancelAnimationFrame(ganttBarLabelRepeatLayoutRaf);
+    ganttBarLabelRepeatLayoutRaf = 0;
+  }
+}
+
+function scheduleLayoutProjectGanttBarLabelRepeats() {
+  if (ganttBarLabelRepeatLayoutRaf) return;
+  ganttBarLabelRepeatLayoutRaf = requestAnimationFrame(() => {
+    ganttBarLabelRepeatLayoutRaf = 0;
+    layoutProjectGanttBarLabelRepeats();
+  });
+}
+
+function layoutProjectGanttBarLabelRepeats() {
+  const host = /** @type {HTMLElement | null} */ ($("#gantt-container"));
+  if (!host) return;
+  const svg = host.querySelector("svg.gantt");
+  if (!svg) return;
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  for (const wrap of svg.querySelectorAll("g.bar-wrapper")) {
+    const bar = wrap.querySelector("rect.bar");
+    const primary = /** @type {SVGTextElement | null} */ (wrap.querySelector("text.bar-label:not(.bar-label--repeat)"));
+    for (const old of wrap.querySelectorAll("text.bar-label--repeat")) {
+      old.remove();
+    }
+    if (primary) primary.removeAttribute("opacity");
+
+    if (!(bar instanceof SVGRectElement) || !primary) continue;
+    if (bar.classList.contains("bar-invalid")) continue;
+
+    const name = primary.textContent?.trim() ?? "";
+    if (!name) continue;
+
+    const bx = bar.x.baseVal.value;
+    const bw = bar.width.baseVal.value;
+    const bh = bar.height.baseVal.value;
+    const by = bar.y.baseVal.value;
+    if (!(bw >= 48)) continue;
+
+    let textW = 0;
+    try {
+      textW = primary.getBBox().width;
+    } catch {
+      continue;
+    }
+
+    const minStride = 72;
+    const stride = Math.min(bw, Math.max(minStride, textW + 28));
+    const maxTiles = 48;
+    const centers = [];
+    let cx = bx + stride / 2;
+    while (cx <= bx + bw - stride / 2 + 0.5 && centers.length < maxTiles) {
+      centers.push(cx);
+      cx += stride;
+    }
+    if (centers.length <= 1) continue;
+
+    const y = primary.getAttribute("y") ?? String(by + bh / 2);
+    /** Auf farbigem Balken immer heller Text (Primary kann .big außerhalb grau sein). */
+    const fill = "#fff";
+    const barGroup = bar.parentElement;
+    if (!barGroup) continue;
+
+    primary.setAttribute("opacity", "0");
+
+    for (const xc of centers) {
+      const t = document.createElementNS(svgNS, "text");
+      t.setAttribute("x", String(xc));
+      t.setAttribute("y", y);
+      t.setAttribute("class", "bar-label bar-label--repeat");
+      t.setAttribute("fill", fill);
+      t.textContent = name;
+      barGroup.appendChild(t);
+    }
+  }
+}
+
+function bindGanttBarLabelRepeatListeners() {
+  ganttBarLabelRepeatAbort?.abort();
+  ganttBarLabelRepeatAbort = new AbortController();
+  const { signal } = ganttBarLabelRepeatAbort;
+  const h = () => scheduleLayoutProjectGanttBarLabelRepeats();
+  const host = /** @type {HTMLElement} */ ($("#gantt-container"));
+  host.addEventListener("scroll", h, { passive: true, signal });
+  const inner = host.querySelector(".gantt-container");
+  if (inner) inner.addEventListener("scroll", h, { passive: true, signal });
+  window.addEventListener("resize", h, { passive: true, signal });
+}
+
+function observeGanttSvgForBarLabelRepeats(svg) {
+  ganttBarLabelRepeatObserver?.disconnect();
+  ganttBarLabelRepeatObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.target instanceof SVGRectElement && m.target.classList.contains("bar")) {
+        scheduleLayoutProjectGanttBarLabelRepeats();
+        return;
+      }
+    }
+  });
+  ganttBarLabelRepeatObserver.observe(svg, {
+    attributes: true,
+    attributeFilter: ["x", "width"],
+    subtree: true,
+  });
+}
+
+function refreshProjectGanttBarLabelRepeats() {
+  const host = /** @type {HTMLElement | null} */ ($("#gantt-container"));
+  const svg = host?.querySelector("svg.gantt");
+  if (!(svg instanceof SVGSVGElement)) return;
+  observeGanttSvgForBarLabelRepeats(svg);
+  bindGanttBarLabelRepeatListeners();
+  scheduleLayoutProjectGanttBarLabelRepeats();
+}
+
 function destroyGantt() {
+  teardownProjectGanttBarLabelRepeats();
   const wrap = /** @type {HTMLElement} */ ($("#gantt-container"));
   wrap.innerHTML = "";
   ganttInstance = null;
@@ -2235,6 +2367,11 @@ function renderGanttCore() {
         void applyProjectDatesFromGantt(pid, startISO, endISO);
       },
     });
+    refreshProjectGanttBarLabelRepeats();
+    requestAnimationFrame(() => {
+      scheduleLayoutProjectGanttBarLabelRepeats();
+      requestAnimationFrame(() => scheduleLayoutProjectGanttBarLabelRepeats());
+    });
   } catch (err) {
     console.error(err);
     wrap.innerHTML =
@@ -2277,6 +2414,8 @@ function setGanttViewMode(mode) {
   if (ganttInstance && typeof ganttInstance.change_view_mode === "function") {
     try {
       ganttInstance.change_view_mode(mode);
+      refreshProjectGanttBarLabelRepeats();
+      requestAnimationFrame(() => scheduleLayoutProjectGanttBarLabelRepeats());
     } catch (err) {
       console.error(err);
       renderGantt();
