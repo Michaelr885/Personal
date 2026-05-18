@@ -712,6 +712,16 @@ async function runAutoStatusSyncAndPersist() {
   await persist();
 }
 
+/**
+ * Status aller Mitarbeitenden an den Kalendertag anpassen, dann einmal speichern.
+ * Nach Stammdaten-/Abwesenheitsänderungen (nicht bei Undo/Redo oder reinen Zuweisungen).
+ */
+async function syncEmployeesThenPersist() {
+  if (!state) return;
+  syncEmployeeStatusesFromAbsenceDates();
+  await persist();
+}
+
 /** Geplanter Start sichtbar: heute im Zeitraum oder Start in 0…5 Tagen. */
 function plannedWindowVisibleOnDashboard(ab, bis) {
   if (ab == null || ab === "") return false;
@@ -1769,7 +1779,7 @@ async function deleteEmployeeById(id) {
   recordUndoSnapshot();
   state.employees = state.employees.filter((e) => Number(e.ID) !== id);
   state.assignments = state.assignments.filter((a) => Number(a.Employee_ID) !== id);
-  await persist();
+  await syncEmployeesThenPersist();
   renderPersonnelView();
   renderDashboard();
   if ($("#view-projects").classList.contains("view--active")) {
@@ -1975,8 +1985,8 @@ function setupPersonnelInteractions() {
       const merged = /** @type {Employee} */ ({ ...state.employees[idx], ...payload });
       syncLegacyAbsenceFields(merged);
       state.employees[idx] = merged;
+      await syncEmployeesThenPersist();
     }
-    await persist();
     resetEmployeeForm();
     renderPersonnelView();
     renderDashboard();
@@ -2031,7 +2041,7 @@ function setupPersonnelInteractions() {
     syncLegacyAbsenceFields(newEmp);
     recordUndoSnapshot();
     state.employees.push(newEmp);
-    await persist();
+    await syncEmployeesThenPersist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
     fillNewEmployeeSelects();
     renderPersonnelView();
@@ -2219,7 +2229,7 @@ function setupDashboardAbsenceModal() {
     }
     syncLegacyAbsenceFields(next);
     state.employees[idx] = next;
-    await persist();
+    await syncEmployeesThenPersist();
     closeDashboardAbsenceModal();
     renderDashboard();
     renderPersonnelView();
