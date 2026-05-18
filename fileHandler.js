@@ -42,6 +42,10 @@ export function createMockDataset() {
         Teamleiter_ID: 1,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: addDays(t, 2),
+        Urlaub_bis: addDays(t, 6),
         Abwesenheit_geplant_ab: addDays(t, 2),
         Abwesenheit_geplant_bis: addDays(t, 6),
       },
@@ -55,6 +59,10 @@ export function createMockDataset() {
         Teamleiter_ID: 1,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: null,
+        Urlaub_bis: null,
         Abwesenheit_geplant_ab: null,
         Abwesenheit_geplant_bis: null,
       },
@@ -67,6 +75,10 @@ export function createMockDataset() {
         Zusatz_Tags: ["Schalung"],
         Teamleiter_ID: 2,
         Status: "Krank",
+        Krank_ab: addDays(t, -2),
+        Krank_bis: addDays(t, 2),
+        Urlaub_ab: null,
+        Urlaub_bis: null,
         Rückkehr_erwartet_am: addDays(t, 3),
         Abwesenheit_geplant_ab: null,
         Abwesenheit_geplant_bis: null,
@@ -81,6 +93,10 @@ export function createMockDataset() {
         Teamleiter_ID: 2,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: addDays(t, 4),
+        Urlaub_bis: addDays(t, 12),
         Abwesenheit_geplant_ab: addDays(t, 4),
         Abwesenheit_geplant_bis: addDays(t, 12),
       },
@@ -93,6 +109,10 @@ export function createMockDataset() {
         Zusatz_Tags: ["Stahl"],
         Teamleiter_ID: 2,
         Status: "Urlaub",
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: addDays(t, 1),
+        Urlaub_bis: addDays(t, 7),
         Rückkehr_erwartet_am: addDays(t, 8),
         Abwesenheit_geplant_ab: null,
         Abwesenheit_geplant_bis: null,
@@ -107,6 +127,10 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: null,
+        Urlaub_bis: null,
         Abwesenheit_geplant_ab: null,
         Abwesenheit_geplant_bis: null,
       },
@@ -120,6 +144,10 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: addDays(t, 1),
+        Urlaub_bis: addDays(t, 10),
         Abwesenheit_geplant_ab: addDays(t, 1),
         Abwesenheit_geplant_bis: addDays(t, 10),
       },
@@ -133,6 +161,10 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
+        Krank_ab: null,
+        Krank_bis: null,
+        Urlaub_ab: null,
+        Urlaub_bis: null,
         Abwesenheit_geplant_ab: null,
         Abwesenheit_geplant_bis: null,
       },
@@ -224,6 +256,25 @@ function normalizeDataset(raw) {
     if (e.Rückkehr_erwartet_am === undefined) e.Rückkehr_erwartet_am = null;
     if (e.Abwesenheit_geplant_ab === undefined) e.Abwesenheit_geplant_ab = null;
     if (e.Abwesenheit_geplant_bis === undefined) e.Abwesenheit_geplant_bis = null;
+    if (e.Krank_ab === undefined) e.Krank_ab = null;
+    if (e.Krank_bis === undefined) e.Krank_bis = null;
+    if (e.Urlaub_ab === undefined) e.Urlaub_ab = null;
+    if (e.Urlaub_bis === undefined) e.Urlaub_bis = null;
+
+    const legacyAb = e.Abwesenheit_geplant_ab;
+    const urlaubAbEmpty = e.Urlaub_ab == null || e.Urlaub_ab === "";
+    if (legacyAb != null && legacyAb !== "" && urlaubAbEmpty) {
+      e.Urlaub_ab = legacyAb;
+      e.Urlaub_bis = e.Abwesenheit_geplant_bis ?? null;
+    }
+
+    const rück = e.Rückkehr_erwartet_am;
+    if (e.Status === "Krank" && rück != null && rück !== "" && (e.Krank_bis == null || e.Krank_bis === "")) {
+      e.Krank_bis = addDays(String(rück), -1);
+    }
+    if (e.Status === "Urlaub" && rück != null && rück !== "" && (e.Urlaub_bis == null || e.Urlaub_bis === "")) {
+      e.Urlaub_bis = addDays(String(rück), -1);
+    }
   }
   return { team_leaders, employees, projects, assignments };
 }

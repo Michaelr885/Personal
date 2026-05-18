@@ -286,23 +286,35 @@
                     <option>Urlaub</option>
                   </select>
                 </label>
+                <p class="form-range-head span-2">Krankheit</p>
+                <label>
+                  Von (optional)
+                  <input type="date" id="new-emp-krank-ab" />
+                </label>
                 <label>
                   <span class="label-with-actions">
-                    <span>Zurück an Arbeit am (bei Krank / Urlaub)</span>
+                    <span>Bis, letzter Krankheitstag (optional)</span>
                     <span class="quick-date-actions">
-                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-rueck" data-days="7">+1 Wo.</button>
-                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-rueck" data-days="14">+2 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-krank-bis" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-krank-bis" data-days="14">+2 Wo.</button>
                     </span>
                   </span>
-                  <input type="date" id="new-emp-rueck" />
+                  <input type="date" id="new-emp-krank-bis" />
+                </label>
+                <p class="form-range-head span-2">Urlaub</p>
+                <label>
+                  Von (optional)
+                  <input type="date" id="new-emp-urlaub-ab" />
                 </label>
                 <label>
-                  Geplanter freier Zeitraum von (nur bei „Verfügbar“)
-                  <input type="date" id="new-emp-plan-ab" />
-                </label>
-                <label>
-                  Geplanter freier Zeitraum bis
-                  <input type="date" id="new-emp-plan-bis" />
+                  <span class="label-with-actions">
+                    <span>Bis, letzter Urlaubstag (optional)</span>
+                    <span class="quick-date-actions">
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-urlaub-bis" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-urlaub-bis" data-days="14">+2 Wo.</button>
+                    </span>
+                  </span>
+                  <input type="date" id="new-emp-urlaub-bis" />
                 </label>
                   </div>
                 </div>
@@ -361,23 +373,35 @@
                     <option>Urlaub</option>
                   </select>
                 </label>
+                <p class="form-range-head span-2">Krankheit</p>
+                <label>
+                  Von (optional)
+                  <input type="date" id="emp-krank-ab" />
+                </label>
                 <label>
                   <span class="label-with-actions">
-                    <span>Zurück an Arbeit am (bei Krank / Urlaub)</span>
+                    <span>Bis, letzter Krankheitstag (optional)</span>
                     <span class="quick-date-actions">
-                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-rueck" data-days="7">+1 Wo.</button>
-                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-rueck" data-days="14">+2 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-krank-bis" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-krank-bis" data-days="14">+2 Wo.</button>
                     </span>
                   </span>
-                  <input type="date" id="emp-rueck" />
+                  <input type="date" id="emp-krank-bis" />
+                </label>
+                <p class="form-range-head span-2">Urlaub</p>
+                <label>
+                  Von (optional)
+                  <input type="date" id="emp-urlaub-ab" />
                 </label>
                 <label>
-                  Geplanter freier Zeitraum von (nur bei „Verfügbar“)
-                  <input type="date" id="emp-plan-ab" />
-                </label>
-                <label>
-                  Geplanter freier Zeitraum bis
-                  <input type="date" id="emp-plan-bis" />
+                  <span class="label-with-actions">
+                    <span>Bis, letzter Urlaubstag (optional)</span>
+                    <span class="quick-date-actions">
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-urlaub-bis" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-urlaub-bis" data-days="14">+2 Wo.</button>
+                    </span>
+                  </span>
+                  <input type="date" id="emp-urlaub-bis" />
                 </label>
                   </div>
                 </div>

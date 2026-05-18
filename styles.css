@@ -832,8 +832,17 @@ code {
   font-size: 0.78rem;
 }
 
-.form-section__grid {
-  margin: 0;
+.form-range-head {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.form-range-head:first-of-type {
+  margin-top: 0;
 }
 
 .label-with-actions {

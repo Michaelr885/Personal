@@ -5,7 +5,7 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null }} Employee */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -188,6 +188,56 @@ function parseISODate(s) {
   return new Date(y, m - 1, d);
 }
 
+/** @param {string|null|undefined} isoStr @param {number} deltaDays */
+function addCalendarDaysToISO(isoStr, deltaDays) {
+  if (isoStr == null || isoStr === "") return null;
+  const [y, m, d] = String(isoStr).split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  const dt = new Date(y, m - 1, d);
+  dt.setHours(12, 0, 0, 0);
+  dt.setDate(dt.getDate() + deltaDays);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Erster Arbeitstag nach dem letzten Abwesenheitstag (inkl. „bis“). */
+function firstWorkdayAfterAbsenceEnd(/** @type {Employee} */ emp) {
+  if (emp.Status === "Krank") {
+    const bis = emp.Krank_bis;
+    if (bis != null && bis !== "") return addCalendarDaysToISO(String(bis), 1);
+    return emp.Rückkehr_erwartet_am != null && emp.Rückkehr_erwartet_am !== ""
+      ? String(emp.Rückkehr_erwartet_am)
+      : null;
+  }
+  if (emp.Status === "Urlaub") {
+    const bis = emp.Urlaub_bis;
+    if (bis != null && bis !== "") return addCalendarDaysToISO(String(bis), 1);
+    return emp.Rückkehr_erwartet_am != null && emp.Rückkehr_erwartet_am !== ""
+      ? String(emp.Rückkehr_erwartet_am)
+      : null;
+  }
+  return null;
+}
+
+/** Hält ältere Felder konsistent (Rückkehr / einheitlicher Urlaubsplan in Abwesenheit_geplant_*). */
+function syncLegacyAbsenceFields(/** @type {Employee} */ emp) {
+  if (emp.Status === "Krank") {
+    emp.Rückkehr_erwartet_am =
+      emp.Krank_bis != null && emp.Krank_bis !== "" ? addCalendarDaysToISO(String(emp.Krank_bis), 1) : null;
+  } else if (emp.Status === "Urlaub") {
+    emp.Rückkehr_erwartet_am =
+      emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? addCalendarDaysToISO(String(emp.Urlaub_bis), 1) : null;
+  } else {
+    emp.Rückkehr_erwartet_am = null;
+  }
+  emp.Abwesenheit_geplant_ab =
+    emp.Urlaub_ab != null && emp.Urlaub_ab !== "" ? String(emp.Urlaub_ab) : null;
+  emp.Abwesenheit_geplant_bis =
+    emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+}
+
 function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   return aStart <= bEnd && bStart <= aEnd;
 }
@@ -226,36 +276,49 @@ function daysUntilISODate(isoStr) {
   return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
-/** Krank/Urlaub: Rückkehr-Hinweis fürs Dashboard (HTML). */
+/** Krank/Urlaub: Hinweis bis zum ersten Arbeitstag nach dem letzten Abwesenheitstag (HTML). */
 function absenceReturnBadgeHtml(emp) {
   if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
-  const raw = emp.Rückkehr_erwartet_am;
+  const raw = firstWorkdayAfterAbsenceEnd(emp);
   if (raw == null || raw === "") {
-    return `<span class="tag-mini" title="Rückkehrdatum in der Personalverwaltung eintragen">kein Rückkehrdatum</span>`;
+    return `<span class="tag-mini" title="„Krankheit bis“ bzw. „Urlaub bis“ setzen (letzter freier Tag vor der Rückkehr)">kein Zeitraum-Ende</span>`;
   }
   const d = daysUntilISODate(raw);
   if (d === null || !Number.isFinite(d)) return "";
   if (d < 0) {
-    return `<span class="warn-abs" title="Erwartete Rückkehr war ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr überfällig</span>`;
+    return `<span class="warn-abs" title="Erster Arbeitstag war ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr überfällig</span>`;
   }
   if (d === 0) {
-    return `<span class="warn-abs" title="Rückkehr heute"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute</span>`;
+    return `<span class="warn-abs" title="Rückkehr an Arbeit geplant ${escapeHtml(String(raw))}"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute</span>`;
   }
   const urgent = d < 30;
   const cls = urgent ? "warn-abs" : "tag-mini";
   const icon = urgent ? "fa-triangle-exclamation" : "fa-calendar-check";
-  return `<span class="${cls}" title="Erwartete Rückkehr ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+  return `<span class="${cls}" title="Erster Arbeitstag nach Abwesenheit: ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> in ${d} Tag${d === 1 ? "" : "en"}</span>`;
 }
 
-/** Verfügbar: ab 5 Tage vor geplantem Abwesenheitsbeginn Hinweis (HTML). */
+/** Verfügbar: ab 5 Tage vor geplantem Beginn Hinweis (HTML), getrennt für Krank- und Urlaubsplan. */
 function plannedAbsenceBadgeHtml(emp) {
   if (emp.Status !== "Verfügbar") return "";
+  const chunks = [];
+  for (const spec of [
+    { label: "Urlaub", von: emp.Urlaub_ab, bis: emp.Urlaub_bis, icon: "fa-umbrella-beach" },
+    { label: "Krank", von: emp.Krank_ab, bis: emp.Krank_bis, icon: "fa-file-medical" },
+  ]) {
+    const { label, von, bis, icon } = spec;
+    if (von == null || von === "") continue;
+    const d = daysUntilISODate(String(von));
+    if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
+    const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
+    chunks.push(
+      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid ${icon}"></i> ${label} in ${d} Tag${d === 1 ? "" : "en"}</span>`
+    );
+  }
+  if (chunks.length) return chunks.join(" ");
   const von = emp.Abwesenheit_geplant_ab;
   if (von == null || von === "") return "";
-  const d = daysUntilISODate(von);
-  if (d === null || !Number.isFinite(d)) return "";
-  if (d < 0) return "";
-  if (d > 5) return "";
+  const d = daysUntilISODate(String(von));
+  if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
   const bis = emp.Abwesenheit_geplant_bis;
   const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
   return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit in ${d} Tag${d === 1 ? "" : "en"}</span>`;
@@ -265,24 +328,36 @@ function plannedAbsenceBadgeHtml(emp) {
 function absenceSummaryPlain(emp) {
   const parts = [];
   if (emp.Status === "Krank" || emp.Status === "Urlaub") {
-    const raw = emp.Rückkehr_erwartet_am;
-    if (raw == null || raw === "") parts.push("Rückkehr: —");
+    const ab = emp.Status === "Krank" ? emp.Krank_ab : emp.Urlaub_ab;
+    const bis = emp.Status === "Krank" ? emp.Krank_bis : emp.Urlaub_bis;
+    if ((ab != null && ab !== "") || (bis != null && bis !== "")) {
+      parts.push(`${emp.Status} ${ab ?? "…"}–${bis ?? "…"}`);
+    }
+    const ret = firstWorkdayAfterAbsenceEnd(emp);
+    if (ret == null || ret === "") parts.push("Rückkehr: —");
     else {
-      const d = daysUntilISODate(raw);
-      if (d === null || !Number.isFinite(d)) parts.push(`Rückkehr: ${raw}`);
-      else if (d < 0) parts.push(`Rückkehr überfällig (${raw})`);
+      const d = daysUntilISODate(ret);
+      if (d === null || !Number.isFinite(d)) parts.push(`Rückkehr: ${ret}`);
+      else if (d < 0) parts.push(`Rückkehr überfällig (${ret})`);
       else if (d === 0) parts.push("Rückkehr heute");
-      else parts.push(`Rückkehr in ${d} Tagen (${raw})`);
+      else parts.push(`Rückkehr in ${d} T. (${ret})`);
     }
   }
   if (emp.Status === "Verfügbar") {
-    const von = emp.Abwesenheit_geplant_ab;
-    if (von) {
-      const d = daysUntilISODate(von);
-      if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) {
-        parts.push(`Abwesenheit ab ${von} in ${d} T.`);
-      } else if (d !== null && Number.isFinite(d) && d > 5) {
-        parts.push(`Geplant ab ${von}`);
+    const pushPlan = (label, von) => {
+      if (von == null || von === "") return;
+      const d = daysUntilISODate(String(von));
+      if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) parts.push(`${label} ab ${von} in ${d} T.`);
+      else if (d !== null && Number.isFinite(d) && d > 5) parts.push(`${label} geplant ab ${von}`);
+    };
+    pushPlan("Krank", emp.Krank_ab);
+    pushPlan("Urlaub", emp.Urlaub_ab);
+    if (!parts.some((p) => p.startsWith("Krank") || p.startsWith("Urlaub"))) {
+      const von = emp.Abwesenheit_geplant_ab;
+      if (von) {
+        const d = daysUntilISODate(String(von));
+        if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) parts.push(`Abwesenheit ab ${von} in ${d} T.`);
+        else if (d !== null && Number.isFinite(d) && d > 5) parts.push(`Geplant ab ${von}`);
       }
     }
   }
@@ -292,9 +367,20 @@ function absenceSummaryPlain(emp) {
 /** Eine Zeile für den Ressourcen-Pool unter der Person. */
 function plannedAbsencePoolLine(emp) {
   if (emp.Status !== "Verfügbar") return "";
+  const lines = [];
+  for (const [label, von] of /** @type {const} */ ([
+    ["Urlaub", emp.Urlaub_ab],
+    ["Krank", emp.Krank_ab],
+  ])) {
+    if (von == null || von === "") continue;
+    const d = daysUntilISODate(String(von));
+    if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
+    lines.push(`${label} ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`);
+  }
+  if (lines.length) return lines.join(" · ");
   const von = emp.Abwesenheit_geplant_ab;
   if (von == null || von === "") return "";
-  const d = daysUntilISODate(von);
+  const d = daysUntilISODate(String(von));
   if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
   return `Abwesenheit ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`;
 }
@@ -335,10 +421,10 @@ function ensureSelectHasValue(sel, value, labelText) {
 
 function absenceHintText(status) {
   if (status === "Verfügbar") {
-    return "Geplanter freier Zeitraum: nur bei „Verfügbar“. Ab 5 Tage vor „von“ zeigt das Dashboard einen Hinweis. Für laufenden Urlaub/Krankheit Status umstellen und „Zurück an Arbeit“ setzen.";
+    return "Zwei Pläne: Krankheit von/bis und Urlaub von/bis (Kalendertage inklusive). Ab 5 Tage vor „von“ zeigt das Dashboard je einen Hinweis. Laufende Abwesenheit: Status auf Krank oder Urlaub stellen und den passenden Zeitraum pflegen.";
   }
   if (status === "Krank" || status === "Urlaub") {
-    return "„Zurück an Arbeit“ festlegen (oder +1 / +2 Wochen) – im Dashboard erscheint die verbleibende Zeit bis dahin.";
+    return "„Von“ und „bis“ = erster bzw. letzter freier Tag; der erste Arbeitstag ist automatisch der Tag nach „bis“. Schnellbuttons setzen „bis“ auf eine bzw. zwei Wochen ab heute.";
   }
   return "";
 }
@@ -587,7 +673,7 @@ function renderDashboard() {
             ? '<span class="pill pill--krank">Krank</span>'
             : '<span class="pill pill--urlaub">Urlaub</span>';
         const ret = absenceReturnBadgeHtml(e);
-        return `<li><span>${e.Vorname} ${e.Nachname} ${pill}<br>${ret || '<span class="hint">Rückkehrdatum nicht gesetzt</span>'}</span></li>`;
+        return `<li><span>${e.Vorname} ${e.Nachname} ${pill}<br>${ret || '<span class="hint">Zeitraum-Ende (bis) nicht gesetzt</span>'}</span></li>`;
       })
           .join("")}</ul>`;
 
@@ -1255,18 +1341,14 @@ function loadEmployeeIntoForm(id) {
         : "";
     const statusSel = /** @type {HTMLSelectElement} */ ($("#emp-status"));
     ensureSelectHasValue(statusSel, e.Status, String(e.Status ?? ""));
-    /** @type {HTMLInputElement} */ ($("#emp-rueck")).value =
-      e.Rückkehr_erwartet_am != null && e.Rückkehr_erwartet_am !== ""
-        ? String(e.Rückkehr_erwartet_am)
-        : "";
-    /** @type {HTMLInputElement} */ ($("#emp-plan-ab")).value =
-      e.Abwesenheit_geplant_ab != null && e.Abwesenheit_geplant_ab !== ""
-        ? String(e.Abwesenheit_geplant_ab)
-        : "";
-    /** @type {HTMLInputElement} */ ($("#emp-plan-bis")).value =
-      e.Abwesenheit_geplant_bis != null && e.Abwesenheit_geplant_bis !== ""
-        ? String(e.Abwesenheit_geplant_bis)
-        : "";
+    /** @type {HTMLInputElement} */ ($("#emp-krank-ab")).value =
+      e.Krank_ab != null && e.Krank_ab !== "" ? String(e.Krank_ab) : "";
+    /** @type {HTMLInputElement} */ ($("#emp-krank-bis")).value =
+      e.Krank_bis != null && e.Krank_bis !== "" ? String(e.Krank_bis) : "";
+    /** @type {HTMLInputElement} */ ($("#emp-urlaub-ab")).value =
+      e.Urlaub_ab != null && e.Urlaub_ab !== "" ? String(e.Urlaub_ab) : "";
+    /** @type {HTMLInputElement} */ ($("#emp-urlaub-bis")).value =
+      e.Urlaub_bis != null && e.Urlaub_bis !== "" ? String(e.Urlaub_bis) : "";
     $("#employee-form-title").innerHTML =
       '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
     syncEditAbsenceHint();
@@ -1361,12 +1443,22 @@ function setupPersonnelInteractions() {
       .map((s) => s.trim())
       .filter(Boolean);
     const tlRaw = /** @type {HTMLSelectElement} */ ($("#emp-tl")).value;
-    const planAb = readOptionalISODateFromInput("#emp-plan-ab");
-    const planBis = readOptionalISODateFromInput("#emp-plan-bis");
-    if (planAb && planBis && planBis < planAb) {
+    const kAb = readOptionalISODateFromInput("#emp-krank-ab");
+    const kBis = readOptionalISODateFromInput("#emp-krank-bis");
+    const uAb = readOptionalISODateFromInput("#emp-urlaub-ab");
+    const uBis = readOptionalISODateFromInput("#emp-urlaub-bis");
+    if (kAb && kBis && kBis < kAb) {
       await openModal(
         "Datum prüfen",
-        "<div>„Geplanter freier Zeitraum bis“ darf nicht vor „von“ liegen.</div>",
+        "<div>„Krankheit bis“ darf nicht vor „Krankheit von“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    if (uAb && uBis && uBis < uAb) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Urlaub bis“ darf nicht vor „Urlaub von“ liegen.</div>",
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
@@ -1379,14 +1471,17 @@ function setupPersonnelInteractions() {
       Zusatz_Tags: tags,
       Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
-      Rückkehr_erwartet_am: readOptionalISODateFromInput("#emp-rueck"),
-      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#emp-plan-ab"),
-      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#emp-plan-bis"),
+      Krank_ab: kAb,
+      Krank_bis: kBis,
+      Urlaub_ab: uAb,
+      Urlaub_bis: uBis,
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
     if (idx >= 0) {
       recordUndoSnapshot();
-      state.employees[idx] = { ...state.employees[idx], ...payload };
+      const merged = /** @type {Employee} */ ({ ...state.employees[idx], ...payload });
+      syncLegacyAbsenceFields(merged);
+      state.employees[idx] = merged;
     }
     await persist();
     resetEmployeeForm();
@@ -1400,17 +1495,27 @@ function setupPersonnelInteractions() {
   $("#new-employee-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!state) return;
-    const planAbNew = readOptionalISODateFromInput("#new-emp-plan-ab");
-    const planBisNew = readOptionalISODateFromInput("#new-emp-plan-bis");
-    if (planAbNew && planBisNew && planBisNew < planAbNew) {
+    const kAbN = readOptionalISODateFromInput("#new-emp-krank-ab");
+    const kBisN = readOptionalISODateFromInput("#new-emp-krank-bis");
+    const uAbN = readOptionalISODateFromInput("#new-emp-urlaub-ab");
+    const uBisN = readOptionalISODateFromInput("#new-emp-urlaub-bis");
+    if (kAbN && kBisN && kBisN < kAbN) {
       await openModal(
         "Datum prüfen",
-        "<div>„Geplanter freier Zeitraum bis“ darf nicht vor „von“ liegen.</div>",
+        "<div>„Krankheit bis“ darf nicht vor „Krankheit von“ liegen.</div>",
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
     }
-    const newEmp = {
+    if (uAbN && uBisN && uBisN < uAbN) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Urlaub bis“ darf nicht vor „Urlaub von“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    const newEmp = /** @type {Employee} */ ({
       ID: nextId(state.employees),
       Personalnummer: /** @type {HTMLInputElement} */ ($("#new-emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#new-emp-vorname")).value.trim(),
@@ -1422,10 +1527,15 @@ function setupPersonnelInteractions() {
       })(),
       Status: /** @type {HTMLSelectElement} */ ($("#new-emp-status")).value,
       Zusatz_Tags: [],
-      Rückkehr_erwartet_am: readOptionalISODateFromInput("#new-emp-rueck"),
-      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#new-emp-plan-ab"),
-      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#new-emp-plan-bis"),
-    };
+      Krank_ab: kAbN,
+      Krank_bis: kBisN,
+      Urlaub_ab: uAbN,
+      Urlaub_bis: uBisN,
+      Rückkehr_erwartet_am: null,
+      Abwesenheit_geplant_ab: null,
+      Abwesenheit_geplant_bis: null,
+    });
+    syncLegacyAbsenceFields(newEmp);
     recordUndoSnapshot();
     state.employees.push(newEmp);
     await persist();
