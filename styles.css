@@ -1294,10 +1294,40 @@ textarea {
   gap: 2px 0;
   padding: 0.25rem 0;
   align-items: center;
+  position: relative;
+}
+
+.urlaub-plan__colbg {
+  pointer-events: none;
+  z-index: 0;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.urlaub-plan__colbg--we {
+  background: rgba(100, 116, 139, 0.22);
+}
+
+.urlaub-plan__colbg--holiday:not(.urlaub-plan__colbg--we) {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.urlaub-plan__colbg--holiday.urlaub-plan__colbg--we {
+  background: rgba(100, 116, 139, 0.32);
 }
 
 .urlaub-plan__head-col--we {
-  background: var(--bg);
+  background: rgba(100, 116, 139, 0.28);
+  color: var(--muted);
+}
+
+.urlaub-plan__head-col--holiday:not(.urlaub-plan__head-col--we) {
+  background: rgba(245, 158, 11, 0.28);
+  color: var(--text);
+}
+
+.urlaub-plan__head-col--holiday.urlaub-plan__head-col--we {
+  background: rgba(100, 116, 139, 0.4);
   color: var(--muted);
 }
 

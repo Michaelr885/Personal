@@ -752,6 +752,105 @@ function monthRangeISO(y, m0) {
   return { start, end, days };
 }
 
+/** Ostersonntag, lokales Mittag (gregorianisch, anonym-gregorianischer Algorithmus). */
+function easterSundayLocalMidday(/** @type {number} */ year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+/** @param {Date} d @param {number} n */
+function addCalendarDaysToDate(d, n) {
+  const x = new Date(d.getTime());
+  x.setDate(x.getDate() + n);
+  x.setHours(12, 0, 0, 0);
+  return x;
+}
+
+/** @param {Date} d */
+function toISODateLocal(d) {
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Gesetzliche Feiertage Hessen: ISO-Datum → deutscher Kurzname (pro Jahr). */
+function hessenHolidayMapForYear(/** @type {number} */ year) {
+  const Easter = easterSundayLocalMidday(year);
+  /** @type {Map<string, string>} */
+  const m = new Map();
+  m.set(toISODateLocal(new Date(year, 0, 1, 12, 0, 0, 0)), "Neujahr");
+  m.set(toISODateLocal(new Date(year, 4, 1, 12, 0, 0, 0)), "Tag der Arbeit");
+  m.set(toISODateLocal(new Date(year, 9, 3, 12, 0, 0, 0)), "Tag der Deutschen Einheit");
+  m.set(toISODateLocal(new Date(year, 11, 25, 12, 0, 0, 0)), "1. Weihnachtstag");
+  m.set(toISODateLocal(new Date(year, 11, 26, 12, 0, 0, 0)), "2. Weihnachtstag");
+  m.set(toISODateLocal(addCalendarDaysToDate(Easter, -2)), "Karfreitag");
+  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 1)), "Ostermontag");
+  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 39)), "Christi Himmelfahrt");
+  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 50)), "Pfingstmontag");
+  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 60)), "Fronleichnam");
+  return m;
+}
+
+/** @type {Map<number, Map<string, string>>} */
+const hessenHolidayYearCache = new Map();
+
+function hessenHolidayMapCached(/** @type {number} */ year) {
+  let m = hessenHolidayYearCache.get(year);
+  if (!m) {
+    m = hessenHolidayMapForYear(year);
+    hessenHolidayYearCache.set(year, m);
+  }
+  return m;
+}
+
+/** @param {string} iso yyyy-mm-dd */
+function hessenHolidayNameDE(iso) {
+  const key = String(iso).slice(0, 10);
+  const y = Number(key.slice(0, 4));
+  if (!Number.isFinite(y)) return null;
+  return hessenHolidayMapCached(y).get(key) ?? null;
+}
+
+function isHessenPublicHolidayISO(iso) {
+  return hessenHolidayNameDE(iso) != null;
+}
+
+/** Mo–Fr ohne hessische gesetzliche Feiertage (Urlaubsstatistik). */
+function countsAsUrlaubArbeitstag(iso) {
+  const d = parseISODate(String(iso));
+  const w = d.getDay();
+  if (w === 0 || w === 6) return false;
+  return !isHessenPublicHolidayISO(iso);
+}
+
+/** Arbeitstage im ISO-Inklusivbereich [isoStart, isoEnd] (Hessen). */
+function countUrlaubWorkdaysInInclusiveRange(isoStart, isoEnd) {
+  let c = 0;
+  let cur = isoStart;
+  let guard = 0;
+  while (cur <= isoEnd && guard++ < 5000) {
+    if (countsAsUrlaubArbeitstag(cur)) c += 1;
+    const nxt = addCalendarDaysToISO(cur, 1);
+    if (nxt == null || nxt <= cur) break;
+    cur = nxt;
+  }
+  return c;
+}
+
 function shiftUrlaubMonth(delta) {
   urlaubCalendarYM.m += delta;
   while (urlaubCalendarYM.m < 0) {
@@ -812,7 +911,7 @@ function mergeInclusiveUrlaubClips(/** @type {{ start: string; end: string }[]} 
   return out;
 }
 
-/** Urlaubstage im Fenster [winStart, winEnd] über alle Urlaubszeiträume einer Person. */
+/** Urlaubs-Arbeitstage (Hessen: Mo–Fr ohne gesetzliche Feiertage) im Fenster [winStart, winEnd]. */
 function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
   /** @type {{ start: string; end: string }[]} */
   const clips = [];
@@ -821,7 +920,7 @@ function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd
     if (clip) clips.push(clip);
   }
   const merged = mergeInclusiveUrlaubClips(clips);
-  return merged.reduce((sum, iv) => sum + calendarDaysInclusive(iv.start, iv.end), 0);
+  return merged.reduce((sum, iv) => sum + countUrlaubWorkdaysInInclusiveRange(iv.start, iv.end), 0);
 }
 
 /** @param {string} iso */
@@ -926,17 +1025,46 @@ function renderUrlaubPlan() {
   );
 
   const headCells = [];
+  /** @type {string[]} */
+  const trackColBgs = [];
   for (let d = 1; d <= days; d++) {
     const dt = new Date(y, m, d);
+    const iso = isoFromYearMonthDay(y, m, d);
     const w = dt.getDay();
     const isWe = w === 0 || w === 6;
+    const hName = hessenHolidayNameDE(iso);
     const shortD = dt.toLocaleDateString("de-DE", { weekday: "short" });
+    const titleBase = dt.toLocaleDateString("de-DE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const title = hName ? `${titleBase} · ${hName}` : titleBase;
+    const cls = [
+      "urlaub-plan__head-col",
+      isWe ? "urlaub-plan__head-col--we" : "",
+      hName ? "urlaub-plan__head-col--holiday" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     headCells.push(
-      `<div class="urlaub-plan__head-col${isWe ? " urlaub-plan__head-col--we" : ""}" title="${escapeHtml(
-        dt.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
-      )}"><span class="urlaub-plan__head-day">${d}</span><span class="urlaub-plan__head-dow">${escapeHtml(shortD)}</span></div>`
+      `<div class="${cls}" title="${escapeHtml(title)}"><span class="urlaub-plan__head-day">${d}</span><span class="urlaub-plan__head-dow">${escapeHtml(
+        shortD
+      )}</span></div>`
+    );
+    const bgCls = [
+      "urlaub-plan__colbg",
+      isWe ? "urlaub-plan__colbg--we" : "",
+      hName ? "urlaub-plan__colbg--holiday" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    trackColBgs.push(
+      `<div class="${bgCls}" style="grid-column:${d}; grid-row:1 / -1" aria-hidden="true"></div>`
     );
   }
+  const trackColBgsHtml = trackColBgs.join("");
 
   const rows = employees.map((emp) => {
     const ranges = getUrlaubRanges(emp);
@@ -978,7 +1106,7 @@ function renderUrlaubPlan() {
     const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
     return `<div class="urlaub-plan__row">
       <div class="urlaub-plan__namecell">${name}</div>
-      <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche: neuen Urlaub eintragen · Balken: bestehenden Zeitraum bearbeiten">${bars}</div>
+      <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche: neuen Urlaub eintragen · Balken: bestehenden Zeitraum bearbeiten">${trackColBgsHtml}${bars}</div>
     </div>`;
   });
 
@@ -1028,7 +1156,7 @@ function renderUrlaubPlan() {
             </button>
           </span>
         </h3>
-        <p class="hint">Summe pro Kalendermonat für dasselbe Jahr wie im Monatsraster oben; letzte Spalte = Summe über das Jahr. Pfeile: Jahr der Tabelle wechseln.</p>
+        <p class="hint">Arbeitstage Hessen (ohne Sa/So, ohne gesetzliche Feiertage in Hessen) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
         <div class="table-wrap urlaub-year-table-wrap">
           <table class="data-table urlaub-summary-table urlaub-year-table">
             <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
