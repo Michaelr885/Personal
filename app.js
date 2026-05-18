@@ -280,6 +280,17 @@ function dateFromGanttToProjectISO(/** @type {unknown} */ d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/**
+ * frappe-gantt speichert task._end als exklusives Ende; letzter belegter Kalendertag = Tag davor.
+ * @param {Date} exclusiveEnd
+ */
+function inclusiveEndISOFromGanttExclusiveEnd(exclusiveEnd) {
+  if (!(exclusiveEnd instanceof Date) || Number.isNaN(exclusiveEnd.getTime())) return "";
+  const t = new Date(exclusiveEnd.getTime());
+  t.setMilliseconds(t.getMilliseconds() - 1);
+  return dateFromGanttToProjectISO(t);
+}
+
 /** Erster Arbeitstag nach dem letzten Abwesenheitstag (inkl. „bis“). */
 function firstWorkdayAfterAbsenceEnd(/** @type {Employee} */ emp) {
   if (emp.Status === "Krank") {
@@ -1969,8 +1980,9 @@ async function applyProjectDatesFromGantt(projectId, startISO, endISO) {
   if (!startISO || !endISO || startISO > endISO) return;
   const idx = state.projects.findIndex((p) => Number(p.ID) === projectId);
   if (idx < 0) return;
-  recordUndoSnapshot();
   const prev = state.projects[idx];
+  if (prev.Startdatum === startISO && prev.Enddatum === endISO) return;
+  recordUndoSnapshot();
   state.projects[idx] = { ...prev, Startdatum: startISO, Enddatum: endISO };
   try {
     await persist();
@@ -1994,6 +2006,51 @@ async function applyProjectDatesFromGantt(projectId, startISO, endISO) {
       renderGantt();
     });
   });
+}
+
+/**
+ * frappe-gantt 0.6 ruft date_changed nur bei mouseup **auf dem SVG** auf.
+ * Loslassen außerhalb des Diagramms → kein on_date_change: hier per Balken-Geometrie nachziehen.
+ */
+function syncProjectDatesFromGanttBarsIfNeeded() {
+  if (!state) return;
+  const pv = /** @type {HTMLElement | null} */ ($("#view-projects"));
+  if (!pv?.classList.contains("view--active")) return;
+  const inst = /** @type {{ bars?: { task?: { id?: string; invalid?: boolean }; compute_start_end_date?: () => { new_start_date: Date; new_end_date: Date } }[] }} */ (
+    ganttInstance
+  );
+  const bars = inst?.bars;
+  if (!Array.isArray(bars)) return;
+  for (const bar of bars) {
+    const task = bar?.task;
+    if (!task || task.invalid) continue;
+    const compute = bar.compute_start_end_date;
+    if (typeof compute !== "function") continue;
+    const { new_start_date, new_end_date } = compute.call(bar);
+    const startISO = dateFromGanttToProjectISO(new_start_date);
+    const endISO = inclusiveEndISOFromGanttExclusiveEnd(new_end_date);
+    if (!startISO || !endISO || startISO > endISO) continue;
+    const pid = Number(task.id);
+    if (!Number.isFinite(pid)) continue;
+    void applyProjectDatesFromGantt(pid, startISO, endISO);
+  }
+}
+
+let ganttDateSyncRaf = 0;
+function scheduleSyncProjectDatesFromGanttBars() {
+  if (ganttDateSyncRaf) cancelAnimationFrame(ganttDateSyncRaf);
+  ganttDateSyncRaf = requestAnimationFrame(() => {
+    ganttDateSyncRaf = 0;
+    syncProjectDatesFromGanttBarsIfNeeded();
+  });
+}
+
+let ganttDocumentDateSyncBound = false;
+function bindGanttProjectDateDocumentSync() {
+  if (ganttDocumentDateSyncBound) return;
+  ganttDocumentDateSyncBound = true;
+  document.addEventListener("mouseup", scheduleSyncProjectDatesFromGanttBars);
+  document.addEventListener("pointerup", scheduleSyncProjectDatesFromGanttBars);
 }
 
 function renderProjectDropZones() {
@@ -2748,6 +2805,8 @@ function setupProjectsInteractions() {
     renderProjectsView();
     renderDashboard();
   });
+
+  bindGanttProjectDateDocumentSync();
 }
 
 function statusCellClass(status) {
