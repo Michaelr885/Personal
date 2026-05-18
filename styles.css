@@ -354,7 +354,7 @@ code {
   background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
 }
 
-/* Teamkarte als Ganzes: sonst „markiert“ der Browser Titel+Hinweis+Liste beim Ziehen */
+/* Teamkarte: kein natives Drag auf der ganzen Fläche (siehe .card-team__drag-handle) */
 #view-dashboard .card-team.team-drop-zone,
 #view-dashboard .panel--unassigned.team-drop-zone {
   -webkit-tap-highlight-color: transparent;
@@ -595,6 +595,21 @@ code {
 
 .card-team {
   border-left: 6px solid var(--team-color, var(--team-fallback));
+}
+
+/* Nur die Kopfzeile ist nativ draggable (Reihenfolge); die Karte selbst nicht — sonst „frisst“ HTML5-Drag das Ziehen von Personen. */
+.card-team__drag-handle {
+  margin: -0.15rem;
+  padding: 0.15rem;
+  border-radius: 10px;
+}
+
+.card-team__drag-handle[draggable="true"] {
+  cursor: grab;
+}
+
+.card-team__drag-handle[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .card-team__title {

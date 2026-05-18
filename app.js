@@ -1831,7 +1831,8 @@ function dashboardTeamCardsUseNativeDrag() {
 
 /**
  * Mitarbeitende: immer ohne natives Drag (Pointer-Zug für Maus, Touch und Stift).
- * Teamkarten-Reihenfolge: optional natives Drag, wenn dashboardTeamCardsUseNativeDrag().
+ * Teamkarten-Reihenfolge: natives HTML5-Drag nur auf `[data-dashboard-team-drag]` (Kopfzeile),
+ * nicht auf der ganzen Karte — sonst startet der Browser beim Ziehen einer Person den Drag der Teamkarte.
  */
 function applyDashboardDragMode(root) {
   const nativeTeam = dashboardTeamCardsUseNativeDrag();
@@ -1839,6 +1840,9 @@ function applyDashboardDragMode(root) {
     if (el instanceof HTMLElement) el.draggable = false;
   });
   root.querySelectorAll("[data-dashboard-team-card]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = false;
+  });
+  root.querySelectorAll("[data-dashboard-team-drag]").forEach((el) => {
     if (el instanceof HTMLElement) el.draggable = nativeTeam;
   });
 }
@@ -1895,12 +1899,14 @@ function renderDashboard() {
         })
         .join("");
       const abt = normalizeAbteilung(tl.Abteilung);
-      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}" title="Teamkarte auf eine andere Karte ziehen, um die Reihenfolge zu ändern">
-        <div class="card-team__title">
-          <strong>${escapeHtml(tl.Name)}</strong>
+      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}" title="Personen in der Liste ziehen (Teamzuordnung). Reihenfolge der Karten: Teamnamen-Zeile greifen und auf eine andere Karte ziehen.">
+        <div class="card-team__drag-handle" data-dashboard-team-drag="1" title="Nur diese Zeile greifen und auf eine andere Teamkarte ziehen, um die Anzeigereihenfolge zu ändern">
+          <div class="card-team__title">
+            <strong>${escapeHtml(tl.Name)}</strong>
+          </div>
         </div>
         <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
-        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen.</div>
+        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen. <strong>Anzeigereihenfolge</strong> der Karten: den <strong>Teamnamen</strong> (oben) auf eine andere Karte ziehen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -1998,8 +2004,9 @@ function renderDashboard() {
       <div class="panel__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
         <p class="hint">
-          Jede Karte steht für eine Teamleitung und deren Abteilung. Ziehen Sie eine Karte auf eine andere,
-          um die <strong>Anzeigereihenfolge</strong> im Dashboard zu ändern (nicht die Teamzuordnung der Mitarbeitenden).
+          Jede Karte steht für eine Teamleitung und deren Abteilung. Ziehen Sie den <strong>Teamnamen</strong> (Kopfzeile)
+          einer Karte auf eine andere, um die <strong>Anzeigereihenfolge</strong> zu ändern. Mitarbeitende ziehen Sie in der
+          Liste oder von „Ohne Teamleitung“, um die Teamzuordnung zu ändern.
         </p>
       </div>
       <div class="grid-dashboard">${teamCards}</div>
@@ -4215,8 +4222,11 @@ function setupDashboardDnD() {
       ev.dataTransfer.effectAllowed = "move";
       return;
     }
-    const teamCard = ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-card]") : null;
-    if (teamCard instanceof HTMLElement) {
+    const teamDragEl =
+      ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-drag]") : null;
+    if (teamDragEl instanceof HTMLElement) {
+      const teamCard = teamDragEl.closest("[data-dashboard-team-card]");
+      if (!(teamCard instanceof HTMLElement)) return;
       const tid = teamCard.getAttribute("data-dashboard-team-card");
       if (!tid) return;
       teamCard.classList.add("card-team--reorder-drag");
