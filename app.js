@@ -51,8 +51,6 @@ function refreshAllDataViews() {
   renderPersonnelView();
   if ($("#view-projects").classList.contains("view--active")) {
     renderProjectsView();
-  } else {
-    renderGantt();
   }
 }
 
@@ -705,10 +703,14 @@ function setupProjectDropDelegation() {
   });
 }
 
-function renderGantt() {
+function renderGanttCore() {
   if (!state) return;
   destroyGantt();
   const wrap = /** @type {HTMLElement} */ ($("#gantt-container"));
+  if (state.projects.length === 0) {
+    wrap.innerHTML = '<p class="hint">Keine Projekte angelegt.</p>';
+    return;
+  }
   const anchor = document.createElement("div");
   anchor.id = "gantt-anchor";
   wrap.appendChild(anchor);
@@ -731,11 +733,36 @@ function renderGantt() {
       '<p class="hint">Gantt-Bibliothek nicht geladen. Bitte Seite neu laden oder CDN prüfen.</p>';
     return;
   }
-  ganttInstance = new GanttCtor("#gantt-anchor", tasks, {
-    view_mode: "Month",
-    language: "de",
-    date_format: "YYYY-MM-DD",
-  });
+  try {
+    ganttInstance = new GanttCtor("#gantt-anchor", tasks, {
+      view_mode: "Month",
+      language: "de",
+      date_format: "YYYY-MM-DD",
+    });
+  } catch (err) {
+    console.error(err);
+    wrap.innerHTML =
+      '<p class="hint">Die Zeitleiste konnte nicht gezeichnet werden. Bitte Konsole prüfen oder Seite neu laden.</p>';
+  }
+}
+
+/** Gantt erst nach Layout der sichtbaren Zeitleisten-Ansicht zeichnen (sonst oft leeres/weißes SVG). */
+function renderGantt() {
+  const projectsView = /** @type {HTMLElement | null} */ ($("#view-projects"));
+  if (!state || !projectsView || !projectsView.classList.contains("view--active")) return;
+  const run = () => {
+    if (!state) return;
+    const pv = /** @type {HTMLElement | null} */ ($("#view-projects"));
+    if (!pv || !pv.classList.contains("view--active")) return;
+    renderGanttCore();
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+  } else {
+    setTimeout(run, 0);
+  }
 }
 
 function uniqueQualifications() {
@@ -879,7 +906,6 @@ function renderProjectsView() {
 
   if (!projSelect.value && state.projects[0]) projSelect.value = String(state.projects[0].ID);
 
-  renderGantt();
   renderProjectDropZones();
   renderEmployeePool();
   renderProjectDetail();
@@ -890,6 +916,8 @@ function renderProjectsView() {
     /** @type {HTMLInputElement} */ ($("#assign-start")).value = proj.Startdatum;
     /** @type {HTMLInputElement} */ ($("#assign-end")).value = proj.Enddatum;
   }
+
+  renderGantt();
 }
 
 async function pushAssignmentAndRefresh(employeeId, projectId, start, end) {
@@ -1118,8 +1146,6 @@ function renderPersonnelTable() {
       renderDashboard();
       if ($("#view-projects").classList.contains("view--active")) {
         renderProjectsView();
-      } else {
-        renderGantt();
       }
     });
   });
