@@ -127,7 +127,8 @@
                 Projekte steuern die Gantt-Zeitleiste und die Ablagekarten. Benötigte Qualifikationen mit
                 geplanter Kopfzahl tragen Sie im Bearbeiten-Dialog ein (eine Zeile pro Qualifikation, „+“ für
                 weitere Zeilen). Ein Klick auf eine Tabellenzeile (nicht auf die Aktionen) wählt das Projekt
-                für die Zuweisung und filtert die Mitarbeitenden-Liste.
+                für die Zuweisung; die Mitarbeitenden-Liste zeigt dann Personen, die im <strong>Projektzeitraum</strong>
+                frei sind (keine überschneidende Zuweisung in einem anderen Projekt).
               </p>
               <div class="table-wrap">
                 <table class="data-table" id="projects-table" aria-label="Projekte">
@@ -169,8 +170,8 @@
                 <label class="pool-filter-opt">
                   <input type="checkbox" id="pool-include-assigned" />
                   <span
-                    >Auch Mitarbeitende anzeigen, die bereits einem Projekt zugewiesen sind (sonst nur ohne
-                    Projekt-Zuweisung, sobald ein Projekt gewählt ist)</span
+                    >Auch Mitarbeitende anzeigen, die im <strong>Projektzeitraum</strong> bereits eine überschneidende
+                    Zuweisung haben (sonst nur zeitlich freie Personen, sobald ein Projekt gewählt ist)</span
                   >
                 </label>
                 <p class="hint" id="employees-hint"></p>
