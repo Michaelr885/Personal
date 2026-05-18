@@ -2045,12 +2045,31 @@ function scheduleSyncProjectDatesFromGanttBars() {
   });
 }
 
+/** Nur nach echtem Balken-Drag: sonst würde jedes document-mouseup (z. B. Scrollbar) sync → renderGantt → scrollLeft zurücksetzen. */
+let ganttBarPointerDownForDateSync = false;
+
+function onGanttBarPointerDownForDateSync(ev) {
+  if (!(ev.target instanceof Element)) return;
+  if (!ev.target.closest(".bar-wrapper")) return;
+  ganttBarPointerDownForDateSync = true;
+}
+
+function onDocumentReleaseSyncGanttProjectDates() {
+  if (!ganttBarPointerDownForDateSync) return;
+  ganttBarPointerDownForDateSync = false;
+  scheduleSyncProjectDatesFromGanttBars();
+}
+
 let ganttDocumentDateSyncBound = false;
 function bindGanttProjectDateDocumentSync() {
   if (ganttDocumentDateSyncBound) return;
   ganttDocumentDateSyncBound = true;
-  document.addEventListener("mouseup", scheduleSyncProjectDatesFromGanttBars);
-  document.addEventListener("pointerup", scheduleSyncProjectDatesFromGanttBars);
+  const ganttHost = /** @type {HTMLElement} */ ($("#gantt-container"));
+  ganttHost.addEventListener("pointerdown", onGanttBarPointerDownForDateSync, true);
+  ganttHost.addEventListener("mousedown", onGanttBarPointerDownForDateSync, true);
+  document.addEventListener("mouseup", onDocumentReleaseSyncGanttProjectDates);
+  document.addEventListener("pointerup", onDocumentReleaseSyncGanttProjectDates);
+  document.addEventListener("pointercancel", onDocumentReleaseSyncGanttProjectDates);
 }
 
 function renderProjectDropZones() {
