@@ -463,34 +463,154 @@ code {
 }
 
 .employee-pool {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.55rem;
   max-height: 420px;
   overflow: auto;
 }
 
-.employee-pool li {
+.employee-pool--cards {
+  padding: 0.15rem 0;
+}
+
+.employee-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.55rem 0.65rem;
+  padding: 0.65rem 0.75rem;
   border-radius: 10px;
   border: 1px dashed var(--border);
   cursor: grab;
-  background: #fafafa;
+  background: linear-gradient(145deg, #fafafa, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.employee-pool li:active {
+.employee-card:active {
   cursor: grabbing;
 }
 
-.employee-pool .name {
+.employee-card .name {
   font-weight: 600;
+}
+
+.panel--drop-hint {
+  margin-bottom: 1rem;
+}
+
+.project-drop-zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.project-drop-card {
+  flex: 1 1 200px;
+  max-width: 280px;
+  min-height: 88px;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 2px dashed var(--border);
+  background: #f8fafc;
+  cursor: default;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.project-drop-card__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin: 0 0 0.25rem;
+  color: var(--text);
+}
+
+.project-drop-card__meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.project-drop-card--active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.modal__card--compact {
+  max-width: 400px;
+}
+
+.dnd-modal__project {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.modal__actions--start {
+  justify-content: flex-start;
+}
+
+.modal__card--warn {
+  max-width: 460px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #fecaca;
+}
+
+.modal__warn-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.modal__warn-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.modal__warn-body {
+  margin: 0;
+  padding: 1rem 1.1rem 0.25rem;
+  line-height: 1.55;
+}
+
+.modal__card--warn .modal__actions {
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+#dnd-assign-modal {
+  z-index: 55;
+}
+
+#dnd-modal-backdrop {
+  z-index: 54;
+}
+
+#assign-conflict-modal {
+  z-index: 65;
+}
+
+#assign-conflict-backdrop {
+  z-index: 64;
+}
+
+.btn--delete-icon {
+  color: var(--status-krank);
+  border-color: transparent;
+}
+
+.btn--delete-icon:hover {
+  background: var(--status-krank-soft);
+  border-color: #fecaca;
 }
 
 .project-detail .meta {
@@ -652,6 +772,14 @@ textarea {
 
 .data-table tbody tr:hover {
   background: #f8fafc;
+}
+
+.actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .status-cell {

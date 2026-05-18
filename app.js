@@ -124,29 +124,70 @@ function certificateWarningDays(certDateStr) {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function collectAssignmentConflicts(employeeId, start, end, projectId, excludeAssignmentId) {
-  const messages = [];
+function addDaysISO(isoDate, days) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * PRÜFUNG 1: Status Krank/Urlaub
+ * PRÜFUNG 2: Überschneidung mit beliebigem bestehenden assignment desselben Mitarbeiters
+ */
+function validateAssignmentForSave(employeeId, start, end) {
   const emp = getEmployee(employeeId);
-  if (!emp) {
-    messages.push("Mitarbeitende/r wurde nicht gefunden.");
-    return messages;
-  }
+  if (!emp) return { conflict: true, fullName: "Unbekannt" };
+  const fullName = `${emp.Vorname} ${emp.Nachname}`.trim();
   if (emp.Status === "Krank" || emp.Status === "Urlaub") {
-    messages.push(`Hinweis: Status ist „${emp.Status}“.`);
+    return { conflict: true, fullName };
   }
-  if (!state) return messages;
+  if (!state) return { conflict: false, fullName };
   for (const a of state.assignments) {
-    if (excludeAssignmentId && Number(a.ID) === Number(excludeAssignmentId)) continue;
     if (Number(a.Employee_ID) !== Number(employeeId)) continue;
     if (!rangesOverlap(a.Startdatum, a.Enddatum, start, end)) continue;
-    if (Number(a.Project_ID) !== Number(projectId)) {
-      const other = getProject(a.Project_ID);
-      messages.push(
-        `Bereits im Zeitraum in Projekt „${other ? other.Name : a.Project_ID}“ eingeteilt.`
-      );
-    }
+    return { conflict: true, fullName };
   }
-  return messages;
+  return { conflict: false, fullName };
+}
+
+function openAssignmentConflictModal(employeeFullName) {
+  return new Promise((resolve) => {
+    const backdrop = /** @type {HTMLElement} */ ($("#assign-conflict-backdrop"));
+    const modal = /** @type {HTMLElement} */ ($("#assign-conflict-modal"));
+    const cancelBtn = /** @type {HTMLButtonElement} */ ($("#assign-conflict-cancel"));
+    const confirmBtn = /** @type {HTMLButtonElement} */ ($("#assign-conflict-confirm"));
+    const body = /** @type {HTMLElement} */ ($("#assign-conflict-body"));
+    body.textContent = `Achtung: ${employeeFullName} ist im gewählten Zeitraum bereits in einem anderen Projekt eingeteilt oder abwesend. Möchtest du ihn trotzdem zuweisen?`;
+    backdrop.hidden = false;
+    modal.hidden = false;
+    const onCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    const onConfirm = () => {
+      cleanup();
+      resolve(true);
+    };
+    function cleanup() {
+      cancelBtn.removeEventListener("click", onCancel);
+      confirmBtn.removeEventListener("click", onConfirm);
+      backdrop.hidden = true;
+      modal.hidden = true;
+    }
+    cancelBtn.addEventListener("click", onCancel);
+    confirmBtn.addEventListener("click", onConfirm);
+  });
 }
 
 function openModal(title, bodyHtml, opts = {}) {
@@ -311,6 +352,125 @@ function destroyGantt() {
   ganttInstance = null;
 }
 
+function renderProjectDropZones() {
+  if (!state) return;
+  const host = /** @type {HTMLElement} */ ($("#project-drop-zones"));
+  host.innerHTML = state.projects
+    .map((p) => {
+      const name = escapeHtml(p.Name);
+      return `<div class="project-drop-card" data-drop-project="${p.ID}" tabindex="0" role="region" aria-label="Ablage ${name}">
+        <p class="project-drop-card__name">${name}</p>
+        <p class="project-drop-card__meta">${p.Startdatum} – ${p.Enddatum}</p>
+      </div>`;
+    })
+    .join("");
+}
+
+function openDndAssignModal(employeeId, projectId) {
+  const emp = getEmployee(employeeId);
+  const proj = getProject(projectId);
+  if (!emp || !proj || !state) return;
+  /** @type {HTMLInputElement} */ ($("#dnd-emp-id")).value = String(employeeId);
+  /** @type {HTMLInputElement} */ ($("#dnd-proj-id")).value = String(projectId);
+  $("#dnd-modal-project-label").textContent = `Projekt: ${proj.Name}`;
+  /** @type {HTMLInputElement} */ ($("#dnd-start")).value = proj.Startdatum;
+  /** @type {HTMLInputElement} */ ($("#dnd-end")).value = proj.Enddatum;
+  $("#dnd-modal-backdrop").hidden = false;
+  $("#dnd-assign-modal").hidden = false;
+}
+
+function closeDndAssignModal() {
+  $("#dnd-modal-backdrop").hidden = true;
+  $("#dnd-assign-modal").hidden = true;
+}
+
+function setupDndAssignModal() {
+  $("#dnd-cancel").addEventListener("click", closeDndAssignModal);
+  $("#dnd-modal-backdrop").addEventListener("click", closeDndAssignModal);
+  $("#dnd-assign-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const employeeId = /** @type {HTMLInputElement} */ ($("#dnd-emp-id")).value;
+    const projectId = /** @type {HTMLInputElement} */ ($("#dnd-proj-id")).value;
+    const start = /** @type {HTMLInputElement} */ ($("#dnd-start")).value;
+    const end = /** @type {HTMLInputElement} */ ($("#dnd-end")).value;
+    if (!employeeId || !projectId || !start || !end) return;
+    if (start > end) {
+      await openModal(
+        "Datum ungültig",
+        "<div>Startdatum darf nicht nach dem Enddatum liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    const v = validateAssignmentForSave(employeeId, start, end);
+    if (v.conflict) {
+      const ok = await openAssignmentConflictModal(v.fullName);
+      if (!ok) return;
+    }
+    closeDndAssignModal();
+    await pushAssignmentAndRefresh(employeeId, projectId, start, end);
+    const projSel = /** @type {HTMLSelectElement} */ ($("#project-select"));
+    projSel.value = String(projectId);
+    renderProjectDetail();
+    fillAssignmentEmployeeSelect(projectId);
+    /** @type {HTMLSelectElement} */ ($("#assign-employee")).value = String(employeeId);
+    /** @type {HTMLInputElement} */ ($("#assign-start")).value = start;
+    /** @type {HTMLInputElement} */ ($("#assign-end")).value = end;
+  });
+}
+
+let activeProjectDropCard = null;
+
+function setupProjectDropDelegation() {
+  const view = /** @type {HTMLElement} */ ($("#view-projects"));
+
+  view.addEventListener("dragenter", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const card = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-project]"));
+    if (!card) return;
+    if (activeProjectDropCard && activeProjectDropCard !== card) {
+      activeProjectDropCard.classList.remove("project-drop-card--active");
+    }
+    activeProjectDropCard = card;
+    card.classList.add("project-drop-card--active");
+  });
+
+  view.addEventListener("dragover", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const card = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-project]"));
+    if (card) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "copy";
+    }
+  });
+
+  view.addEventListener("dragleave", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const card = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-project]"));
+    if (!card) return;
+    const rel = /** @type {Node | null} */ (ev.relatedTarget);
+    if (!rel || !card.contains(rel)) {
+      card.classList.remove("project-drop-card--active");
+      if (activeProjectDropCard === card) activeProjectDropCard = null;
+    }
+  });
+
+  view.addEventListener("drop", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const card = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-project]"));
+    if (!card) return;
+    ev.preventDefault();
+    card.classList.remove("project-drop-card--active");
+    activeProjectDropCard = null;
+    const projectId = card.dataset.dropProject;
+    const employeeId =
+      ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("text/employee-id");
+    if (!employeeId || !projectId || !state) return;
+    openDndAssignModal(employeeId, projectId);
+  });
+}
+
 function renderGantt() {
   if (!state) return;
   destroyGantt();
@@ -371,13 +531,13 @@ function renderEmployeePool() {
   $("#employees-hint").textContent = `${emps.length} Person(en) im Pool (nur Status „Verfügbar“).`;
   list.innerHTML = emps
     .map(
-      (e) => `<li draggable="true" data-employee-id="${e.ID}">
+      (e) => `<div class="employee-card" draggable="true" data-id="${e.ID}">
       <div>
         <div class="name">${e.Vorname} ${e.Nachname}</div>
         <div class="hint">${e.Qualifikation} · ${e.Personalnummer}</div>
       </div>
       <i class="fa-solid fa-grip-lines-vertical" aria-hidden="true"></i>
-    </li>`
+    </div>`
     )
     .join("");
 }
@@ -429,6 +589,7 @@ function renderProjectDetail() {
       state.assignments = state.assignments.filter((a) => Number(a.ID) !== id);
       await persist();
       renderProjectDetail();
+      renderProjectDropZones();
       renderEmployeePool();
       renderDashboard();
       renderGantt();
@@ -477,6 +638,7 @@ function renderProjectsView() {
   if (!projSelect.value && state.projects[0]) projSelect.value = String(state.projects[0].ID);
 
   renderGantt();
+  renderProjectDropZones();
   renderEmployeePool();
   renderProjectDetail();
   fillAssignmentEmployeeSelect(projSelect.value);
@@ -488,22 +650,8 @@ function renderProjectsView() {
   }
 }
 
-async function submitAssignment(employeeId, projectId, start, end) {
+async function pushAssignmentAndRefresh(employeeId, projectId, start, end) {
   if (!state) return;
-  const conflicts = collectAssignmentConflicts(employeeId, start, end, projectId, null);
-  const busyElsewhere = conflicts.some((c) => c.startsWith("Bereits im Zeitraum"));
-  const absenceNote = conflicts.some((c) => c.startsWith("Hinweis:"));
-
-  if (busyElsewhere || absenceNote) {
-    const detail = conflicts.map((c) => `<p>${c}</p>`).join("");
-    const html = `<div>${detail}<p><strong>Mitarbeiter bereits belegt. Trotzdem zuweisen?</strong></p></div>`;
-    const ok = await openModal("Konflikt bei der Zuweisung", html, {
-      confirmText: "Ja, trotzdem zuweisen",
-      confirmDanger: true,
-    });
-    if (!ok) return;
-  }
-
   const newRow = {
     ID: nextId(state.assignments),
     Project_ID: Number(projectId),
@@ -514,9 +662,20 @@ async function submitAssignment(employeeId, projectId, start, end) {
   state.assignments.push(newRow);
   await persist();
   renderProjectDetail();
+  renderProjectDropZones();
   renderEmployeePool();
   renderDashboard();
   renderGantt();
+}
+
+async function submitAssignment(employeeId, projectId, start, end) {
+  if (!state) return;
+  const v = validateAssignmentForSave(employeeId, start, end);
+  if (v.conflict) {
+    const ok = await openAssignmentConflictModal(v.fullName);
+    if (!ok) return;
+  }
+  await pushAssignmentAndRefresh(employeeId, projectId, start, end);
 }
 
 function setupProjectsInteractions() {
@@ -538,9 +697,11 @@ function setupProjectsInteractions() {
   });
 
   $("#employee-pool").addEventListener("dragstart", (ev) => {
-    const li = /** @type {HTMLElement} */ (ev.target).closest("li[draggable]");
-    if (!li) return;
-    ev.dataTransfer.setData("text/employee-id", li.dataset.employeeId || "");
+    const el = ev.target instanceof Element ? ev.target : null;
+    const card = /** @type {HTMLElement | null} */ (el?.closest(".employee-card[data-id]"));
+    if (!card || !card.dataset.id) return;
+    ev.dataTransfer.setData("text/plain", card.dataset.id);
+    ev.dataTransfer.setData("text/employee-id", card.dataset.id);
     ev.dataTransfer.effectAllowed = "copy";
   });
 
@@ -555,7 +716,7 @@ function setupProjectsInteractions() {
   rightPanel.addEventListener("drop", (ev) => {
     ev.preventDefault();
     rightPanel.classList.remove("drop-target");
-    const id = ev.dataTransfer.getData("text/employee-id");
+    const id = ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("text/employee-id");
     if (!id) return;
     /** @type {HTMLSelectElement} */ ($("#assign-employee")).value = id;
   });
@@ -611,15 +772,15 @@ function renderPersonnelTable() {
         <td>${tl ? tl.Name : "—"}</td>
         <td class="${sc}">${e.Status}</td>
         <td>${e.Zertifikat_Gültig_Bis}</td>
-        <td>
-          <button type="button" class="btn btn--ghost" data-edit="${e.ID}"><i class="fa-solid fa-pen"></i></button>
-          <button type="button" class="btn btn--ghost" data-delete="${e.ID}"><i class="fa-solid fa-trash"></i></button>
+        <td class="actions-cell">
+          <button type="button" class="btn btn--icon btn--ghost" data-edit="${e.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="btn btn--icon btn--delete-icon" data-delete="${e.ID}" title="Löschen" aria-label="Löschen"><i class="fa-solid fa-trash-can"></i></button>
         </td>
       </tr>`;
     })
     .join("");
   tbody.innerHTML =
-    rows || '<tr><td colspan="7" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+    rows || '<tr><td colspan="8" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
 
   tbody.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => loadEmployeeIntoForm(Number(/** @type {HTMLElement} */ (btn).dataset.edit)));
@@ -638,7 +799,11 @@ function renderPersonnelTable() {
       await persist();
       renderPersonnelView();
       renderDashboard();
-      renderGantt();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      } else {
+        renderGantt();
+      }
     });
   });
 }
@@ -656,14 +821,25 @@ function loadEmployeeIntoForm(id) {
   /** @type {HTMLSelectElement} */ ($("#emp-status")).value = e.Status;
   /** @type {HTMLInputElement} */ ($("#emp-cert")).value = e.Zertifikat_Gültig_Bis;
   $("#employee-form-title").innerHTML =
-    '<i class="fa-solid fa-user-pen"></i> Mitarbeitende/n bearbeiten';
+    '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
 }
 
 function resetEmployeeForm() {
   /** @type {HTMLFormElement} */ ($("#employee-form")).reset();
   /** @type {HTMLInputElement} */ ($("#emp-id")).value = "";
   $("#employee-form-title").innerHTML =
-    '<i class="fa-solid fa-user-plus"></i> Mitarbeitende/n anlegen';
+    '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
+}
+
+function fillNewEmployeeSelects() {
+  const quals = uniqueQualifications();
+  /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).innerHTML = quals
+    .map((q) => `<option value="${q}">${q}</option>`)
+    .join("");
+  if (!state) return;
+  /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML = state.team_leaders
+    .map((t) => `<option value="${t.ID}">${t.Name}</option>`)
+    .join("");
 }
 
 function fillQualificationSelects() {
@@ -672,6 +848,7 @@ function fillQualificationSelects() {
   /** @type {HTMLSelectElement} */ ($("#emp-qual")).innerHTML = opts;
   /** @type {HTMLSelectElement} */ ($("#personnel-filter-qual")).innerHTML =
     `<option value="">Alle</option>` + quals.map((q) => `<option value="${q}">${q}</option>`).join("");
+  fillNewEmployeeSelects();
 }
 
 function fillTeamLeaderSelect() {
@@ -698,6 +875,15 @@ function setupPersonnelInteractions() {
   $("#employee-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!state) return;
+    const existingId = /** @type {HTMLInputElement} */ ($("#emp-id")).value;
+    if (!existingId) {
+      await openModal(
+        "Bearbeiten",
+        "<div>Bitte wählen Sie in der Tabelle zuerst einen Mitarbeitenden über das Stift-Symbol.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const tags = /** @type {HTMLInputElement} */ ($("#emp-tags"))
       .value.split(",")
       .map((s) => s.trim())
@@ -712,25 +898,41 @@ function setupPersonnelInteractions() {
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
       Zertifikat_Gültig_Bis: /** @type {HTMLInputElement} */ ($("#emp-cert")).value,
     };
-    const existingId = /** @type {HTMLInputElement} */ ($("#emp-id")).value;
-    if (existingId) {
-      const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
-      if (idx >= 0) {
-        state.employees[idx] = { ...state.employees[idx], ...payload };
-      }
-    } else {
-      state.employees.push({
-        ID: nextId(state.employees),
-        ...payload,
-      });
+    const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
+    if (idx >= 0) {
+      state.employees[idx] = { ...state.employees[idx], ...payload };
     }
     await persist();
     resetEmployeeForm();
     renderPersonnelView();
     renderDashboard();
     if ($("#view-projects").classList.contains("view--active")) {
-      renderEmployeePool();
-      renderGantt();
+      renderProjectsView();
+    }
+  });
+
+  $("#new-employee-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const newEmp = {
+      ID: nextId(state.employees),
+      Personalnummer: /** @type {HTMLInputElement} */ ($("#new-emp-pnr")).value.trim(),
+      Vorname: /** @type {HTMLInputElement} */ ($("#new-emp-vorname")).value.trim(),
+      Nachname: /** @type {HTMLInputElement} */ ($("#new-emp-nachname")).value.trim(),
+      Qualifikation: /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).value,
+      Teamleiter_ID: Number(/** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value),
+      Status: /** @type {HTMLSelectElement} */ ($("#new-emp-status")).value,
+      Zusatz_Tags: [],
+      Zertifikat_Gültig_Bis: addDaysISO(todayISO(), 365),
+    };
+    state.employees.push(newEmp);
+    await persist();
+    /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
+    fillNewEmployeeSelects();
+    renderPersonnelView();
+    renderDashboard();
+    if ($("#view-projects").classList.contains("view--active")) {
+      renderProjectsView();
     }
   });
 }
@@ -785,6 +987,8 @@ function boot() {
   setupNavigation();
   setupProjectsInteractions();
   setupPersonnelInteractions();
+  setupDndAssignModal();
+  setupProjectDropDelegation();
   setupFileLinking();
   setNavEnabled(false);
 }

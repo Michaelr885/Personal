@@ -96,6 +96,17 @@
               <div id="gantt-container" class="gantt-wrap"></div>
             </div>
 
+            <div class="panel panel--drop-hint">
+              <div class="panel__head">
+                <h2><i class="fa-solid fa-arrow-down-wide-short"></i> Projekt als Ziel</h2>
+              </div>
+              <p class="hint">
+                Ziehen Sie eine verfügbare Person aus der Liste unten auf eine Projektkarte. Anschließend
+                wählen Sie den Zuweisungszeitraum im Dialog.
+              </p>
+              <div id="project-drop-zones" class="project-drop-zones" aria-label="Projekte als Ablagezonen"></div>
+            </div>
+
             <div class="split">
               <div class="panel panel--left">
                 <div class="panel__head">
@@ -106,7 +117,7 @@
                   </label>
                 </div>
                 <p class="hint" id="employees-hint"></p>
-                <ul id="employee-pool" class="employee-pool"></ul>
+                <div id="employee-pool" class="employee-pool employee-pool--cards"></div>
               </div>
               <div class="panel panel--right">
                 <div class="panel__head">
@@ -139,8 +150,8 @@
                     </div>
                   </form>
                   <p class="hint">
-                    Ziehen Sie eine Person aus der linken Liste auf dieses Panel, um die Auswahl
-                    im Formular zu übernehmen.
+                    Ziehen Sie eine Person auf eine Projektkarte (oben) oder hierher, um die Auswahl im
+                    Formular zu übernehmen.
                   </p>
                 </div>
               </div>
@@ -185,7 +196,7 @@
                       <th>Teamleitung</th>
                       <th>Status</th>
                       <th>Zertifikat bis</th>
-                      <th></th>
+                      <th>Aktionen</th>
                     </tr>
                   </thead>
                   <tbody id="personnel-tbody"></tbody>
@@ -195,10 +206,55 @@
 
             <div class="panel">
               <div class="panel__head">
+                <h2><i class="fa-solid fa-user-plus"></i> Neuen Mitarbeiter anlegen</h2>
+              </div>
+              <form id="new-employee-form" class="form-grid form-grid--wide">
+                <label>
+                  Personalnummer
+                  <input type="text" id="new-emp-pnr" name="Personalnummer" required autocomplete="off" />
+                </label>
+                <label>
+                  Vorname
+                  <input type="text" id="new-emp-vorname" required autocomplete="given-name" />
+                </label>
+                <label>
+                  Nachname
+                  <input type="text" id="new-emp-nachname" required autocomplete="family-name" />
+                </label>
+                <label>
+                  Qualifikation
+                  <select id="new-emp-qual" required></select>
+                </label>
+                <label>
+                  Teamleiter
+                  <select id="new-emp-tl" required></select>
+                </label>
+                <label>
+                  Status
+                  <select id="new-emp-status" required>
+                    <option>Verfügbar</option>
+                    <option>Krank</option>
+                    <option>Urlaub</option>
+                  </select>
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit" class="btn btn--primary">
+                    <i class="fa-solid fa-user-plus"></i> Mitarbeiter anlegen
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head">
                 <h2 id="employee-form-title">
-                  <i class="fa-solid fa-user-plus"></i> Mitarbeitende/n anlegen
+                  <i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten
                 </h2>
               </div>
+              <p class="hint" id="edit-form-hint">
+                Wählen Sie in der Tabelle das Stift-Symbol, um Stammdaten (inkl. Zertifikat und Tags) zu
+                bearbeiten.
+              </p>
               <form id="employee-form" class="form-grid form-grid--wide">
                 <input type="hidden" id="emp-id" />
                 <label>
@@ -267,6 +323,63 @@
         <div class="modal__actions">
           <button type="button" class="btn" id="modal-cancel">Abbrechen</button>
           <button type="button" class="btn btn--danger" id="modal-confirm">
+            Trotzdem zuweisen
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="dnd-modal-backdrop" class="modal-backdrop" hidden></div>
+    <div
+      id="dnd-assign-modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dnd-modal-title"
+      hidden
+    >
+      <div class="modal__card modal__card--compact">
+        <h2 id="dnd-modal-title">Projektzuweisung</h2>
+        <p class="dnd-modal__project" id="dnd-modal-project-label"></p>
+        <form id="dnd-assign-form" class="form-grid">
+          <input type="hidden" id="dnd-emp-id" />
+          <input type="hidden" id="dnd-proj-id" />
+          <label>
+            Von
+            <input type="date" id="dnd-start" required />
+          </label>
+          <label>
+            Bis
+            <input type="date" id="dnd-end" required />
+          </label>
+          <div class="modal__actions span-2 modal__actions--start">
+            <button type="button" class="btn" id="dnd-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn--primary">
+              <i class="fa-solid fa-floppy-disk"></i> Speichern
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="assign-conflict-backdrop" class="modal-backdrop" hidden></div>
+    <div
+      id="assign-conflict-modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="assign-conflict-title"
+      hidden
+    >
+      <div class="modal__card modal__card--warn">
+        <div class="modal__warn-header">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          <h2 id="assign-conflict-title">Achtung</h2>
+        </div>
+        <p id="assign-conflict-body" class="modal__warn-body"></p>
+        <div class="modal__actions">
+          <button type="button" class="btn" id="assign-conflict-cancel">Abbrechen</button>
+          <button type="button" class="btn btn--danger" id="assign-conflict-confirm">
             Trotzdem zuweisen
           </button>
         </div>
