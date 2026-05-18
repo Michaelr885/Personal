@@ -523,20 +523,20 @@ function absenceReturnBadgeHtml(emp) {
   const raw = firstWorkdayAfterAbsenceEnd(emp);
   const de = raw ? formatDateDE(raw) : "";
   if (raw == null || raw === "") {
-    return `<span class="tag-mini" title="„Krankheit bis“ bzw. „Urlaub bis“ setzen (letzter freier Tag vor der Rückkehr)">kein Zeitraum-Ende</span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr abs-hint--muted" title="„Krankheit bis“ bzw. „Urlaub bis“ setzen (letzter freier Tag vor der Rückkehr)">kein Zeitraum-Ende</span>`;
   }
   const d = daysUntilISODate(raw);
   if (d === null || !Number.isFinite(d)) {
-    return `<span class="tag-mini" title="Erster Arbeitstag nach Abwesenheit"><i class="fa-solid fa-calendar-check"></i> Rückkehr ab ${escapeHtml(de)}</span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr" title="Erster Arbeitstag nach Abwesenheit"><i class="fa-solid fa-calendar-check"></i> Rückkehr ab ${escapeHtml(de)}</span>`;
   }
   if (d < 0) {
-    return `<span class="warn-abs" title="Geplanter erster Arbeitstag ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr <strong>${escapeHtml(de)}</strong> überfällig</span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr abs-hint--danger" title="Geplanter erster Arbeitstag ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr <strong>${escapeHtml(de)}</strong> überfällig</span>`;
   }
   if (d === 0) {
-    return `<span class="warn-abs" title="Rückkehr an Arbeit geplant"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute · <strong>${escapeHtml(de)}</strong></span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr abs-hint--warn" title="Rückkehr an Arbeit geplant"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute · <strong>${escapeHtml(de)}</strong></span>`;
   }
   const urgent = d < 30;
-  const cls = urgent ? "warn-abs" : "tag-mini";
+  const cls = urgent ? "abs-hint abs-hint--rueckkehr abs-hint--warn" : "abs-hint abs-hint--rueckkehr";
   const icon = urgent ? "fa-triangle-exclamation" : "fa-calendar-check";
   return `<span class="${cls}" title="Erster Arbeitstag nach Abwesenheit: ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> Rückkehr ab <strong>${escapeHtml(de)}</strong> · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
 }
@@ -559,7 +559,7 @@ function plannedAbsenceBadgeHtml(emp) {
         ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
         : "";
     chunks.push(
-      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
+      `<span class="abs-hint abs-hint--urlaub-start" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
     );
   }
   for (const spec of /** @type {const} */ ([{ label: "Krank", von: emp.Krank_ab, bis: emp.Krank_bis, icon: "fa-file-medical" }])) {
@@ -573,7 +573,7 @@ function plannedAbsenceBadgeHtml(emp) {
         ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
         : "";
     chunks.push(
-      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
+      `<span class="abs-hint abs-hint--krank-start" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
     );
   }
   if (chunks.length) return chunks.join(" ");
@@ -587,7 +587,7 @@ function plannedAbsenceBadgeHtml(emp) {
     bis && String(bis) !== String(von)
       ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
       : "";
-  return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
+  return `<span class="abs-hint abs-hint--urlaub-start" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
 }
 
 /** Fließtext für Personal-Tabelle (ohne HTML). */
@@ -1766,15 +1766,17 @@ function plannedVerfügbarReturnLineHtml(ab, bis, kind = "Urlaub") {
   const d = daysUntilISODate(ret);
   const de = formatDateDE(ret);
   if (d === null || !Number.isFinite(d)) {
-    return `<span class="tag-mini"><i class="fa-solid fa-calendar-check"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong></span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr"><i class="fa-solid fa-calendar-check"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong></span>`;
   }
   if (d < 0) {
-    return `<span class="warn-abs"><i class="fa-solid fa-circle-xmark"></i> Geplanter Arbeitstag <strong>${escapeHtml(de)}</strong> liegt in der Vergangenheit</span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr abs-hint--danger"><i class="fa-solid fa-circle-xmark"></i> Geplanter Arbeitstag <strong>${escapeHtml(de)}</strong> liegt in der Vergangenheit</span>`;
   }
   if (d === 0) {
-    return `<span class="warn-abs"><i class="fa-solid fa-triangle-exclamation"></i> Geplant: erster Arbeitstag heute · <strong>${escapeHtml(de)}</strong></span>`;
+    return `<span class="abs-hint abs-hint--rueckkehr abs-hint--warn"><i class="fa-solid fa-triangle-exclamation"></i> Geplant: erster Arbeitstag heute · <strong>${escapeHtml(de)}</strong></span>`;
   }
-  return `<span class="warn-abs"><i class="fa-solid ${icon}"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong> · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
+  const urgent = d < 30;
+  const cls = urgent ? "abs-hint abs-hint--rueckkehr abs-hint--warn" : "abs-hint abs-hint--rueckkehr";
+  return `<span class="${cls}"><i class="fa-solid ${icon}"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong> · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
 }
 
 /** Krank/Urlaub: Abwesenheitszeitraum für die Dashboard-Abwesenheitsliste. */
@@ -1831,7 +1833,8 @@ function dashboardTeamCardsUseNativeDrag() {
 
 /**
  * Mitarbeitende: immer ohne natives Drag (Pointer-Zug für Maus, Touch und Stift).
- * Teamkarten-Reihenfolge: optional natives Drag, wenn dashboardTeamCardsUseNativeDrag().
+ * Teamkarten-Reihenfolge: natives HTML5-Drag nur auf `[data-dashboard-team-drag]` (Kopfzeile),
+ * nicht auf der ganzen Karte — sonst startet der Browser beim Ziehen einer Person den Drag der Teamkarte.
  */
 function applyDashboardDragMode(root) {
   const nativeTeam = dashboardTeamCardsUseNativeDrag();
@@ -1839,6 +1842,9 @@ function applyDashboardDragMode(root) {
     if (el instanceof HTMLElement) el.draggable = false;
   });
   root.querySelectorAll("[data-dashboard-team-card]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = false;
+  });
+  root.querySelectorAll("[data-dashboard-team-drag]").forEach((el) => {
     if (el instanceof HTMLElement) el.draggable = nativeTeam;
   });
 }
@@ -1896,8 +1902,10 @@ function renderDashboard() {
         .join("");
       const abt = normalizeAbteilung(tl.Abteilung);
       return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
-        <div class="card-team__title">
-          <strong>${escapeHtml(tl.Name)}</strong>
+        <div class="card-team__drag-handle" data-dashboard-team-drag="1">
+          <div class="card-team__title">
+            <strong>${escapeHtml(tl.Name)}</strong>
+          </div>
         </div>
         <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
@@ -4210,8 +4218,11 @@ function setupDashboardDnD() {
       ev.dataTransfer.effectAllowed = "move";
       return;
     }
-    const teamCard = ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-card]") : null;
-    if (teamCard instanceof HTMLElement) {
+    const teamDragEl =
+      ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-drag]") : null;
+    if (teamDragEl instanceof HTMLElement) {
+      const teamCard = teamDragEl.closest("[data-dashboard-team-card]");
+      if (!(teamCard instanceof HTMLElement)) return;
       const tid = teamCard.getAttribute("data-dashboard-team-card");
       if (!tid) return;
       teamCard.classList.add("card-team--reorder-drag");

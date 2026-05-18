@@ -354,7 +354,7 @@ code {
   background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
 }
 
-/* Teamkarte als Ganzes: sonst „markiert“ der Browser Titel+Hinweis+Liste beim Ziehen */
+/* Teamkarte: kein natives Drag auf der ganzen Fläche (siehe .card-team__drag-handle) */
 #view-dashboard .card-team.team-drop-zone,
 #view-dashboard .panel--unassigned.team-drop-zone {
   -webkit-tap-highlight-color: transparent;
@@ -597,6 +597,21 @@ code {
   border-left: 6px solid var(--team-color, var(--team-fallback));
 }
 
+/* Nur die Kopfzeile ist nativ draggable (Reihenfolge); die Karte selbst nicht — sonst „frisst“ HTML5-Drag das Ziehen von Personen. */
+.card-team__drag-handle {
+  margin: -0.15rem;
+  padding: 0.15rem;
+  border-radius: 10px;
+}
+
+.card-team__drag-handle[draggable="true"] {
+  cursor: grab;
+}
+
+.card-team__drag-handle[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .card-team__title {
   display: flex;
   align-items: center;
@@ -679,6 +694,56 @@ code {
   align-items: center;
   gap: 0.2rem;
   max-width: 100%;
+}
+
+/* Abwesenheits-Hinweise: Rückkehr (Arbeit) vs. geplanter Urlaubsbeginn — unterschiedliche Farben */
+.abs-hint {
+  font-size: 0.75rem;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0.18rem 0.42rem;
+  border-radius: 6px;
+  line-height: 1.25;
+  border: 1px solid transparent;
+}
+
+.abs-hint--rueckkehr {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #5eead4;
+}
+
+.abs-hint--rueckkehr.abs-hint--warn {
+  color: #9a3412;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.abs-hint--rueckkehr.abs-hint--danger {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.abs-hint--rueckkehr.abs-hint--muted {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.abs-hint--urlaub-start {
+  color: #5b21b6;
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+
+.abs-hint--krank-start {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fcd34d;
 }
 
 .absence-list {
