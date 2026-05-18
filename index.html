@@ -50,6 +50,10 @@
             <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
             Personalverwaltung
           </button>
+          <button type="button" class="nav-btn" data-view="urlaub" disabled>
+            <i class="fa-solid fa-umbrella-beach" aria-hidden="true"></i>
+            Urlaub
+          </button>
         </nav>
 
         <div class="sidebar__footer">
@@ -285,7 +289,7 @@
                       <option value="">Alle</option>
                       <option>Mechanik</option>
                       <option>Steriltechnik</option>
-                      <option>KunststoffIch und Gewerbe</option>
+                      <option>Kunststofftechnik und Gewerbe</option>
                       <option>Rohrfertigung</option>
                     </select>
                   </label>
@@ -349,7 +353,7 @@
                   <select id="new-emp-abteilung" required>
                     <option>Mechanik</option>
                     <option>Steriltechnik</option>
-                    <option>KunststoffIch und Gewerbe</option>
+                    <option>Kunststofftechnik und Gewerbe</option>
                     <option>Rohrfertigung</option>
                   </select>
                 </label>
@@ -462,7 +466,7 @@
                   <select id="emp-abteilung" required>
                     <option>Mechanik</option>
                     <option>Steriltechnik</option>
-                    <option>KunststoffIch und Gewerbe</option>
+                    <option>Kunststofftechnik und Gewerbe</option>
                     <option>Rohrfertigung</option>
                   </select>
                 </label>
@@ -537,6 +541,71 @@
                   </button>
                 </div>
               </form>
+            </div>
+          </section>
+
+          <section id="view-urlaub" class="view" hidden aria-labelledby="page-title">
+            <div class="panel">
+              <div class="panel__head panel__head--wrap">
+                <h2><i class="fa-solid fa-umbrella-beach"></i> Urlaubsplan</h2>
+                <div class="toolbar urlaub-toolbar-month">
+                  <button type="button" class="btn btn--small" id="urlaub-month-prev" title="Vorheriger Monat">
+                    <i class="fa-solid fa-chevron-left"></i>
+                  </button>
+                  <span id="urlaub-month-label" class="urlaub-month-label"></span>
+                  <button type="button" class="btn btn--small" id="urlaub-month-next" title="Nächster Monat">
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+              <p class="hint">
+                Kalender mit einem Tag pro Spalte (Gantt-ähnlich). Haupt-Urlaub und zusätzliche Zeiträume aus den
+                Stammdaten. Nach links/rechts scrollen, wenn der Monat viele Tage hat.
+              </p>
+              <div class="toolbar urlaub-toolbar-filters">
+                <label class="field-inline">
+                  <span>Suche</span>
+                  <input type="search" id="urlaub-search" placeholder="Name, Pers.-Nr.…" autocomplete="off" />
+                </label>
+                <label class="field-inline">
+                  <span>Qualifikation</span>
+                  <select id="urlaub-filter-qual"></select>
+                </label>
+                <label class="field-inline">
+                  <span>Abteilung</span>
+                  <select id="urlaub-filter-abteilung">
+                    <option value="">Alle</option>
+                    <option>Mechanik</option>
+                    <option>Steriltechnik</option>
+                    <option>Kunststofftechnik und Gewerbe</option>
+                    <option>Rohrfertigung</option>
+                  </select>
+                </label>
+                <label class="field-inline">
+                  <span>AÜG/Eigene</span>
+                  <select id="urlaub-filter-beschäftigung">
+                    <option value="">Alle</option>
+                    <option>AÜG</option>
+                    <option>Eigene</option>
+                  </select>
+                </label>
+                <label class="field-inline">
+                  <span>Stufe</span>
+                  <select id="urlaub-filter-stufe"></select>
+                </label>
+                <label class="field-inline">
+                  <span>Status</span>
+                  <select id="urlaub-filter-status">
+                    <option value="">Alle</option>
+                    <option>Verfügbar</option>
+                    <option>Krank</option>
+                    <option>Urlaub</option>
+                  </select>
+                </label>
+              </div>
+              <div class="table-wrap urlaub-plan-wrap">
+                <div id="urlaub-plan-root"></div>
+              </div>
             </div>
           </section>
         </div>

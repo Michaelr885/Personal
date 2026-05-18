@@ -26,13 +26,14 @@ const BESCHÄFTIGUNG_EIGENE = "Eigene";
 const ABTEILUNGEN = /** @type {const} */ ([
   "Mechanik",
   "Steriltechnik",
-  "KunststoffIch und Gewerbe",
+  "Kunststofftechnik und Gewerbe",
   "Rohrfertigung",
 ]);
 
 /** @param {unknown} raw */
 function normalizeAbteilung(raw) {
-  const s = String(raw ?? "").trim();
+  let s = String(raw ?? "").trim();
+  if (s === "KunststoffIch und Gewerbe") s = "Kunststofftechnik und Gewerbe";
   if (/** @type {readonly string[]} */ (ABTEILUNGEN).includes(s)) return s;
   return ABTEILUNGEN[0];
 }
@@ -104,6 +105,9 @@ function refreshAllDataViews() {
   renderPersonnelView();
   if ($("#view-projects").classList.contains("view--active")) {
     renderProjectsView();
+  }
+  if ($("#view-urlaub")?.classList?.contains("view--active")) {
+    renderUrlaubPlan();
   }
 }
 
@@ -211,6 +215,7 @@ const views = {
   dashboard: /** @type {HTMLElement} */ ($("#view-dashboard")),
   projects: /** @type {HTMLElement} */ ($("#view-projects")),
   personnel: /** @type {HTMLElement} */ ($("#view-personnel")),
+  urlaub: /** @type {HTMLElement} */ ($("#view-urlaub")),
 };
 
 const titles = {
@@ -226,7 +231,17 @@ const titles = {
     title: "Personalverwaltung",
     subtitle: "Stammdaten pflegen, filtern und Teamzuordnungen ändern.",
   },
+  urlaub: {
+    title: "Urlaub",
+    subtitle: "Urlaubszeiten aller Mitarbeitenden im Monatsraster – filterbar.",
+  },
 };
+
+/** Angezeigter Monat in der Urlaubsplan-Ansicht (Jahr, Monat 0–11). */
+let urlaubCalendarYM = (() => {
+  const d = new Date();
+  return { y: d.getFullYear(), m: d.getMonth() };
+})();
 
 let ganttInstance = null;
 /** @type {"Day"|"Week"|"Month"} */
@@ -678,6 +693,222 @@ function validateUrlaubPeriodOrder(rawVon, rawBis) {
   return true;
 }
 
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+/** @param {number} y @param {number} m0 Monat 0–11 */
+function monthRangeISO(y, m0) {
+  const days = new Date(y, m0 + 1, 0).getDate();
+  const start = `${y}-${pad2(m0 + 1)}-01`;
+  const end = `${y}-${pad2(m0 + 1)}-${pad2(days)}`;
+  return { start, end, days };
+}
+
+function shiftUrlaubMonth(delta) {
+  urlaubCalendarYM.m += delta;
+  while (urlaubCalendarYM.m < 0) {
+    urlaubCalendarYM.m += 12;
+    urlaubCalendarYM.y -= 1;
+  }
+  while (urlaubCalendarYM.m > 11) {
+    urlaubCalendarYM.m -= 12;
+    urlaubCalendarYM.y += 1;
+  }
+}
+
+/** @param {string|null|undefined} ab @param {string|null|undefined} bis @param {string} monthStart @param {string} monthEnd */
+function clipUrlaubRangeToMonth(ab, bis, monthStart, monthEnd) {
+  if (ab == null || ab === "") return null;
+  const a = String(ab);
+  const effEnd = bis != null && bis !== "" ? String(bis) : monthEnd;
+  const start = a > monthStart ? a : monthStart;
+  const end = effEnd < monthEnd ? effEnd : monthEnd;
+  if (start > end) return null;
+  return { start, end };
+}
+
+/** @param {string} iso */
+function dayOfMonthFromISO(iso) {
+  return Number(String(iso).slice(8, 10)) || 1;
+}
+
+/**
+ * Überlappende Urlaubsbalken auf Zeilen verteilen (grid-row).
+ * @param {{ gs: number; ge: number }[]} segs gs erster Tag (1…31), ge exklusiv
+ */
+function stackVacationBars(segs) {
+  const sorted = segs.map((s) => ({ gs: s.gs, ge: s.ge, row: 1 }));
+  /** @type {{ gs: number; ge: number }[][]} */
+  const byRow = [];
+  for (const s of sorted) {
+    let r = 0;
+    for (; r < byRow.length; r++) {
+      const overlap = byRow[r].some((o) => !(s.ge <= o.gs || s.gs >= o.ge));
+      if (!overlap) break;
+    }
+    if (!byRow[r]) byRow[r] = [];
+    byRow[r].push({ gs: s.gs, ge: s.ge });
+    s.row = r + 1;
+  }
+  return sorted;
+}
+
+function fillUrlaubFilterSelects() {
+  if (!state) return;
+  const quals = uniqueQualifications();
+  const qualSel = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-qual"));
+  if (qualSel) {
+    const prev = qualSel.value;
+    qualSel.innerHTML =
+      '<option value="">Alle</option>' +
+      quals.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`).join("");
+    if (prev && [...qualSel.options].some((o) => o.value === prev)) qualSel.value = prev;
+  }
+  const stufeSel = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-stufe"));
+  if (stufeSel) {
+    const prevS = stufeSel.value;
+    const stufen = [
+      ...new Set(state.employees.map((e) => String(e.Stufe ?? "").trim()).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, "de"));
+    stufeSel.innerHTML =
+      '<option value="">Alle</option>' +
+      stufen.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+    if (prevS && [...stufeSel.options].some((o) => o.value === prevS)) stufeSel.value = prevS;
+  }
+}
+
+function filterEmployeesForUrlaubView() {
+  if (!state) return [];
+  const qEl = /** @type {HTMLInputElement | null} */ ($("#urlaub-search"));
+  const fqEl = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-qual"));
+  const fBeschEl = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-beschäftigung"));
+  const fStufeEl = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-stufe"));
+  const fAbtEl = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-abteilung"));
+  const fstEl = /** @type {HTMLSelectElement | null} */ ($("#urlaub-filter-status"));
+  const q = (qEl?.value ?? "").trim().toLowerCase();
+  const fq = fqEl?.value ?? "";
+  const fBesch = fBeschEl?.value ?? "";
+  const fStufe = fStufeEl?.value ?? "";
+  const fAbt = fAbtEl?.value ?? "";
+  const fst = fstEl?.value ?? "";
+  return state.employees.filter((e) => {
+    const hay = `${e.Vorname} ${e.Nachname} ${e.Personalnummer}`.toLowerCase();
+    if (q && !hay.includes(q)) return false;
+    if (fst && e.Status !== fst) return false;
+    if (fq && e.Qualifikation !== fq) return false;
+    if (fBesch && normalizeBeschäftigung(e.Beschäftigung) !== fBesch) return false;
+    if (fStufe && String(e.Stufe ?? "").trim() !== fStufe) return false;
+    if (fAbt && normalizeAbteilung(e.Abteilung) !== fAbt) return false;
+    return true;
+  });
+}
+
+function isoFromYearMonthDay(y, m0, day) {
+  return `${y}-${pad2(m0 + 1)}-${pad2(day)}`;
+}
+
+function renderUrlaubPlan() {
+  if (!state) return;
+  const root = /** @type {HTMLElement | null} */ ($("#urlaub-plan-root"));
+  const labelEl = /** @type {HTMLElement | null} */ ($("#urlaub-month-label"));
+  if (!root || !labelEl) return;
+  fillUrlaubFilterSelects();
+  const { y, m } = urlaubCalendarYM;
+  labelEl.textContent = new Date(y, m, 1).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const { start: monthStart, end: monthEnd, days } = monthRangeISO(y, m);
+  const employees = filterEmployeesForUrlaubView().sort((a, b) =>
+    `${a.Nachname} ${a.Vorname}`.localeCompare(`${b.Nachname} ${b.Vorname}`, "de")
+  );
+
+  const headCells = [];
+  for (let d = 1; d <= days; d++) {
+    const dt = new Date(y, m, d);
+    const w = dt.getDay();
+    const isWe = w === 0 || w === 6;
+    const shortD = dt.toLocaleDateString("de-DE", { weekday: "short" });
+    headCells.push(
+      `<div class="urlaub-plan__head-col${isWe ? " urlaub-plan__head-col--we" : ""}" title="${escapeHtml(
+        dt.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      )}"><span class="urlaub-plan__head-day">${d}</span><span class="urlaub-plan__head-dow">${escapeHtml(shortD)}</span></div>`
+    );
+  }
+
+  const rows = employees.map((emp) => {
+    const ranges = getUrlaubRanges(emp);
+    /** @type {{ gs: number; ge: number }[]} */
+    const rawSegs = [];
+    for (const r of ranges) {
+      const clip = clipUrlaubRangeToMonth(r.ab, r.bis, monthStart, monthEnd);
+      if (!clip) continue;
+      const gs = dayOfMonthFromISO(clip.start);
+      const ge = dayOfMonthFromISO(clip.end) + 1;
+      rawSegs.push({ gs, ge });
+    }
+    const segs = stackVacationBars(rawSegs);
+    const maxRow = segs.length ? Math.max(...segs.map((s) => s.row)) : 1;
+    const bars = segs.length
+      ? segs
+          .map((s) => {
+            const t0 = isoFromYearMonthDay(y, m, s.gs);
+            const t1 = isoFromYearMonthDay(y, m, s.ge - 1);
+            const title = `${formatDateDE(t0)}–${formatDateDE(t1)}`;
+            return `<div class="urlaub-bar" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(title)}"></div>`;
+          })
+          .join("")
+      : '<span class="hint urlaub-plan__empty">kein Urlaub</span>';
+    const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
+    const meta = `<span class="urlaub-plan__meta">${escapeHtml(emp.Qualifikation)} · ${escapeHtml(
+      normalizeAbteilung(emp.Abteilung)
+    )}</span>`;
+    return `<div class="urlaub-plan__row">
+      <div class="urlaub-plan__namecell">${name}${meta}</div>
+      <div class="urlaub-plan__track" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}">${bars}</div>
+    </div>`;
+  });
+
+  root.innerHTML = `<div class="urlaub-plan" style="--urlaub-days:${days}">
+    <div class="urlaub-plan__head-row">
+      <div class="urlaub-plan__corner">Mitarbeitende/r</div>
+      <div class="urlaub-plan__head-days" style="--urlaub-d:${days}">${headCells.join("")}</div>
+    </div>
+    ${
+      rows.length
+        ? rows.join("")
+        : '<p class="hint urlaub-plan__empty urlaub-plan__empty--block">Keine Einträge für die Filter.</p>'
+    }
+  </div>`;
+}
+
+function setupUrlaubView() {
+  const prev = /** @type {HTMLButtonElement | null} */ ($("#urlaub-month-prev"));
+  const next = /** @type {HTMLButtonElement | null} */ ($("#urlaub-month-next"));
+  if (!prev || prev.dataset.bound === "1") return;
+  prev.dataset.bound = "1";
+  next.dataset.bound = "1";
+  prev.addEventListener("click", () => {
+    shiftUrlaubMonth(-1);
+    renderUrlaubPlan();
+  });
+  next.addEventListener("click", () => {
+    shiftUrlaubMonth(1);
+    renderUrlaubPlan();
+  });
+  for (const id of [
+    "urlaub-search",
+    "urlaub-filter-qual",
+    "urlaub-filter-stufe",
+    "urlaub-filter-abteilung",
+    "urlaub-filter-beschäftigung",
+    "urlaub-filter-status",
+  ]) {
+    const el = $(`#${id}`);
+    if (!el) continue;
+    el.addEventListener("input", () => renderUrlaubPlan());
+    el.addEventListener("change", () => renderUrlaubPlan());
+  }
+}
+
 /** @param {unknown} c */
 function sanitizeTeamColor(c) {
   const s = typeof c === "string" ? c.trim() : "";
@@ -813,12 +1044,13 @@ function switchView(name) {
     el.hidden = !active;
     el.classList.toggle("view--active", active);
   });
-  const meta = titles[/** @type {"dashboard"|"projects"|"personnel"} */ (name)];
+  const meta = titles[/** @type {keyof typeof titles} */ (name)];
   $("#page-title").textContent = meta.title;
   $("#page-subtitle").textContent = meta.subtitle;
   if (name === "dashboard") renderDashboard();
   if (name === "projects") renderProjectsView();
   if (name === "personnel") renderPersonnelView();
+  if (name === "urlaub") renderUrlaubPlan();
 }
 
 function hasValidTeamLeader(emp) {
@@ -2178,6 +2410,9 @@ function renderPersonnelView() {
   renderPersonnelTable();
   syncEditAbsenceHint();
   syncNewAbsenceHint();
+  if ($("#view-urlaub")?.classList?.contains("view--active")) {
+    renderUrlaubPlan();
+  }
 }
 
 function bindUrlaubPeriodenButtonsOnce() {
@@ -3010,6 +3245,7 @@ function boot() {
   setupDashboardAbsenceModal();
   setupProjectsInteractions();
   setupPersonnelInteractions();
+  setupUrlaubView();
   setupPersonnelTableActions();
   setupQuickReturnDateButtons();
   setupDndAssignModal();

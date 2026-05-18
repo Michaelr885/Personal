@@ -1196,3 +1196,126 @@ textarea {
   margin-top: 0;
   padding-top: 0;
 }
+
+/* ——— Urlaubsplan (Monats-Gantt) ——— */
+.urlaub-toolbar-month {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.urlaub-month-label {
+  min-width: 10rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.urlaub-plan-wrap {
+  overflow-x: auto;
+}
+
+.urlaub-plan {
+  --name-col: 220px;
+  min-width: calc(var(--name-col) + var(--urlaub-days, 28) * 22px);
+}
+
+.urlaub-plan__head-row,
+.urlaub-plan__row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+
+.urlaub-plan__head-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.urlaub-plan__corner,
+.urlaub-plan__namecell {
+  flex: 0 0 var(--name-col);
+  max-width: var(--name-col);
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-right: 1px solid var(--border);
+}
+
+.urlaub-plan__namecell {
+  font-weight: 500;
+  align-self: center;
+}
+
+.urlaub-plan__head-days,
+.urlaub-plan__track {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--urlaub-d, 28), minmax(20px, 1fr));
+}
+
+.urlaub-plan__head-col {
+  text-align: center;
+  padding: 0.3rem 0.1rem;
+  font-size: 0.68rem;
+  border-left: 1px solid var(--border);
+}
+
+.urlaub-plan__head-col--we {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.urlaub-plan__head-day {
+  display: block;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.urlaub-plan__head-dow {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: capitalize;
+}
+
+.urlaub-plan__row:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.urlaub-plan__meta {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 0.15rem;
+}
+
+.urlaub-plan__track {
+  grid-template-rows: repeat(var(--urlaub-rows, 1), minmax(14px, auto));
+  gap: 2px 0;
+  padding: 0.25rem 0;
+  align-items: center;
+}
+
+.urlaub-bar {
+  background: var(--status-urlaub-soft);
+  box-shadow: inset 0 0 0 1px var(--status-urlaub);
+  border-radius: 4px;
+  min-height: 13px;
+  margin: 0 1px;
+}
+
+.urlaub-plan__empty {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: center;
+  padding-left: 0.35rem;
+}
+
+.urlaub-plan__empty--block {
+  grid-column: unset;
+  padding: 0.75rem 0.5rem;
+}
