@@ -727,6 +727,8 @@ function preferDashboardTouchDrag() {
   try {
     if (window.matchMedia("(pointer: coarse)").matches) return true;
     if (window.matchMedia("(hover: none)").matches && navigator.maxTouchPoints > 0) return true;
+    /* Schmale Ansicht + Touch: manche Browser melden pointer:fine (z. B. iPad/Desktop-Modus). */
+    if (window.matchMedia("(max-width: 720px)").matches && navigator.maxTouchPoints > 0) return true;
   } catch {
     /* ignore */
   }
@@ -1999,7 +2001,149 @@ function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
   zone?.classList.add("team-drop-zone--active");
 }
 
-/** Touch-Zug für Dashboard (Smartphones ohne zuverlässiges HTML5-DnD). */
+/**
+ * Pointer-Zug (Touch/Stift): setPointerCapture liefert zuverlässig pointermove,
+ * auch wenn Touch-Events am Container hängen bleiben.
+ */
+function setupDashboardPointerDrag(view) {
+  if (view.dataset.dashboardPointer === "1") return;
+  view.dataset.dashboardPointer = "1";
+  const THRESH = 10;
+
+  /** @type {{ pointerId: number | null; id: string | null; row: HTMLElement | null; startX: number; startY: number; lastX: number; lastY: number; active: boolean; cleanup: (() => void) | null }} */
+  const st = {
+    pointerId: null,
+    id: null,
+    row: null,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    active: false,
+    cleanup: null,
+  };
+
+  function resetPointerDrag() {
+    if (st.cleanup) {
+      st.cleanup();
+      st.cleanup = null;
+    }
+    if (st.row?.hasAttribute("data-dashboard-drag-lock")) {
+      st.row.draggable = st.row.getAttribute("data-dashboard-drag-lock") === "1";
+      st.row.removeAttribute("data-dashboard-drag-lock");
+    }
+    st.row?.classList.remove("dashboard-emp-dragging");
+    view.classList.remove("dashboard-view--touch-drag");
+    clearDashboardDropZoneHighlight();
+    st.pointerId = null;
+    st.id = null;
+    st.row = null;
+    st.active = false;
+  }
+
+  view.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (ev.pointerType === "mouse") return;
+      if (ev.button !== 0) return;
+      const row =
+        ev.target instanceof Element ? ev.target.closest("[data-dashboard-employee]") : null;
+      if (!(row instanceof HTMLElement)) return;
+      const id = row.getAttribute("data-dashboard-employee");
+      if (!id) return;
+
+      if (st.pointerId != null) resetPointerDrag();
+
+      if (!row.hasAttribute("data-dashboard-drag-lock")) {
+        row.setAttribute("data-dashboard-drag-lock", row.draggable ? "1" : "0");
+      }
+      row.draggable = false;
+
+      st.pointerId = ev.pointerId;
+      st.id = id;
+      st.row = row;
+      st.startX = ev.clientX;
+      st.startY = ev.clientY;
+      st.lastX = ev.clientX;
+      st.lastY = ev.clientY;
+      st.active = false;
+
+      const moveOpts = { passive: false, capture: true };
+      const upOpts = { passive: false, capture: true };
+
+      const onMove = (e) => {
+        if (e.pointerId !== st.pointerId || st.id == null) return;
+        st.lastX = e.clientX;
+        st.lastY = e.clientY;
+        const dx = e.clientX - st.startX;
+        const dy = e.clientY - st.startY;
+        if (!st.active) {
+          if (dx * dx + dy * dy < THRESH * THRESH) return;
+          st.active = true;
+          st.row?.classList.add("dashboard-emp-dragging");
+          view.classList.add("dashboard-view--touch-drag");
+        }
+        e.preventDefault();
+        dashboardHighlightDropZoneUnderPoint(e.clientX, e.clientY);
+      };
+
+      const onUp = async (e) => {
+        if (e.pointerId !== st.pointerId) return;
+        const pendingId = st.id;
+        const wasActive = st.active;
+        const endX = st.lastX;
+        const endY = st.lastY;
+        const pid = st.pointerId;
+        const capRow = st.row;
+        try {
+          if (capRow != null && pid != null) capRow.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+        if (wasActive) e.preventDefault();
+        resetPointerDrag();
+        if (!pendingId || !wasActive || !state) return;
+        await new Promise((r) => requestAnimationFrame(r));
+        let under = document.elementFromPoint(endX, endY);
+        if (!(under instanceof Element)) {
+          under = document.elementFromPoint(e.clientX, e.clientY);
+        }
+        await dashboardHandleEmployeeDrop(pendingId, under instanceof Element ? under : null);
+      };
+
+      let captured = false;
+      try {
+        row.setPointerCapture(ev.pointerId);
+        captured = true;
+      } catch {
+        /* ältere Engines: Listener auf document */
+      }
+
+      if (captured) {
+        row.addEventListener("pointermove", onMove, moveOpts);
+        row.addEventListener("pointerup", onUp, upOpts);
+        row.addEventListener("pointercancel", onUp, upOpts);
+        st.cleanup = () => {
+          row.removeEventListener("pointermove", onMove, moveOpts);
+          row.removeEventListener("pointerup", onUp, upOpts);
+          row.removeEventListener("pointercancel", onUp, upOpts);
+        };
+      } else {
+        document.addEventListener("pointermove", onMove, moveOpts);
+        document.addEventListener("pointerup", onUp, upOpts);
+        document.addEventListener("pointercancel", onUp, upOpts);
+        st.cleanup = () => {
+          document.removeEventListener("pointermove", onMove, moveOpts);
+          document.removeEventListener("pointerup", onUp, upOpts);
+          document.removeEventListener("pointercancel", onUp, upOpts);
+        };
+      }
+    },
+    { capture: true, passive: true }
+  );
+}
+
+/** Touch-Zug (Fallback ohne Pointer Events, z. B. sehr alte WebViews). */
 function setupDashboardTouchDrag(view) {
   if (view.dataset.dashboardTouch === "1") return;
   view.dataset.dashboardTouch = "1";
@@ -2203,7 +2347,10 @@ function setupDashboardDnD() {
     await dashboardHandleEmployeeDrop(empId, el);
   });
 
-  setupDashboardTouchDrag(view);
+  setupDashboardPointerDrag(view);
+  if (typeof PointerEvent === "undefined") {
+    setupDashboardTouchDrag(view);
+  }
 }
 
 function boot() {
