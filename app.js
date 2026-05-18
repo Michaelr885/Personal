@@ -1831,6 +1831,8 @@ function loadEmployeeIntoForm(id) {
   try {
     const e = getEmployee(id);
     if (!e) return;
+    const panel = /** @type {HTMLElement | null} */ ($("#employee-edit-panel"));
+    if (panel) panel.hidden = false;
     /** @type {HTMLInputElement} */ ($("#emp-id")).value = String(e.ID);
     /** @type {HTMLInputElement} */ ($("#emp-pnr")).value = String(e.Personalnummer ?? "");
     /** @type {HTMLInputElement} */ ($("#emp-vorname")).value = String(e.Vorname ?? "");
@@ -1855,7 +1857,6 @@ function loadEmployeeIntoForm(id) {
     $("#employee-form-title").innerHTML =
       '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
     syncEditAbsenceHint();
-    const panel = /** @type {HTMLElement | null} */ ($("#employee-edit-panel"));
     if (panel) {
       panel.scrollIntoView({ behavior: "smooth", block: "start" });
       panel.focus({ preventScroll: true });
@@ -1864,6 +1865,8 @@ function loadEmployeeIntoForm(id) {
     }
   } catch (err) {
     console.error("loadEmployeeIntoForm", err);
+    const errPanel = /** @type {HTMLElement | null} */ ($("#employee-edit-panel"));
+    if (errPanel) errPanel.hidden = true;
     void openModal(
       "Bearbeiten",
       "<div>Die Stammdaten konnten nicht geladen werden. Details siehe Konsole.</div>",
@@ -1878,6 +1881,8 @@ function resetEmployeeForm() {
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
   syncEditAbsenceHint();
+  const panel = /** @type {HTMLElement | null} */ ($("#employee-edit-panel"));
+  if (panel) panel.hidden = true;
 }
 
 function fillNewEmployeeSelects() {
