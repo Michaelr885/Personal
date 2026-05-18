@@ -717,15 +717,60 @@ function shiftUrlaubMonth(delta) {
   }
 }
 
-/** @param {string|null|undefined} ab @param {string|null|undefined} bis @param {string} monthStart @param {string} monthEnd */
-function clipUrlaubRangeToMonth(ab, bis, monthStart, monthEnd) {
+/** @param {string|null|undefined} ab @param {string|null|undefined} bis @param {string} windowStart @param {string} windowEnd */
+function clipUrlaubRangeToWindow(ab, bis, windowStart, windowEnd) {
   if (ab == null || ab === "") return null;
   const a = String(ab);
-  const effEnd = bis != null && bis !== "" ? String(bis) : monthEnd;
-  const start = a > monthStart ? a : monthStart;
-  const end = effEnd < monthEnd ? effEnd : monthEnd;
+  const effEnd = bis != null && bis !== "" ? String(bis) : windowEnd;
+  const start = a > windowStart ? a : windowStart;
+  const end = effEnd < windowEnd ? effEnd : windowEnd;
   if (start > end) return null;
   return { start, end };
+}
+
+/** @param {string|null|undefined} ab @param {string|null|undefined} bis @param {string} monthStart @param {string} monthEnd */
+function clipUrlaubRangeToMonth(ab, bis, monthStart, monthEnd) {
+  return clipUrlaubRangeToWindow(ab, bis, monthStart, monthEnd);
+}
+
+/** Inklusive Kalendertage zwischen zwei ISO-Daten (yyyy-mm-dd). */
+function calendarDaysInclusive(isoStart, isoEnd) {
+  const [ya, ma, da] = String(isoStart).split("-").map(Number);
+  const [yb, mb, db] = String(isoEnd).split("-").map(Number);
+  const t0 = new Date(ya, ma - 1, da).setHours(12, 0, 0, 0);
+  const t1 = new Date(yb, mb - 1, db).setHours(12, 0, 0, 0);
+  return Math.round((t1 - t0) / 86400000) + 1;
+}
+
+/** Überlappende oder aneinander grenzende Urlaubsclips zusammenführen (keine Doppelzählung). */
+function mergeInclusiveUrlaubClips(/** @type {{ start: string; end: string }[]} */ clips) {
+  if (!clips.length) return [];
+  const sorted = clips.slice().sort((a, b) => a.start.localeCompare(b.start));
+  /** @type {{ start: string; end: string }[]} */
+  const out = [{ ...sorted[0] }];
+  for (let i = 1; i < sorted.length; i++) {
+    const c = sorted[i];
+    const last = out[out.length - 1];
+    const lastPlus = addCalendarDaysToISO(last.end, 1);
+    if (lastPlus != null && c.start <= lastPlus) {
+      if (c.end > last.end) last.end = c.end;
+    } else {
+      out.push({ ...c });
+    }
+  }
+  return out;
+}
+
+/** Urlaubstage im Fenster [winStart, winEnd] über alle Urlaubszeiträume einer Person. */
+function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
+  /** @type {{ start: string; end: string }[]} */
+  const clips = [];
+  for (const r of getUrlaubRanges(emp)) {
+    const clip = clipUrlaubRangeToWindow(r.ab, r.bis, winStart, winEnd);
+    if (clip) clips.push(clip);
+  }
+  const merged = mergeInclusiveUrlaubClips(clips);
+  return merged.reduce((sum, iv) => sum + calendarDaysInclusive(iv.start, iv.end), 0);
 }
 
 /** @param {string} iso */
@@ -858,25 +903,75 @@ function renderUrlaubPlan() {
           .join("")
       : '<span class="hint urlaub-plan__empty">kein Urlaub</span>';
     const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
-    const meta = `<span class="urlaub-plan__meta">${escapeHtml(emp.Qualifikation)} · ${escapeHtml(
-      normalizeAbteilung(emp.Abteilung)
-    )}</span>`;
     return `<div class="urlaub-plan__row">
-      <div class="urlaub-plan__namecell">${name}${meta}</div>
-      <div class="urlaub-plan__track" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}">${bars}</div>
+      <div class="urlaub-plan__namecell">${name}</div>
+      <div class="urlaub-plan__track urlaub-plan--daylines" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}">${bars}</div>
     </div>`;
   });
+
+  const monthShortTitle = new Date(y, m, 1).toLocaleDateString("de-DE", { month: "short", year: "numeric" });
+  const monthSummaryRows = employees
+    .map((emp) => {
+      const n = countVacationDaysInWindow(emp, monthStart, monthEnd);
+      return `<tr><td>${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td><td class="urlaub-summary__num">${n}</td></tr>`;
+    })
+    .join("");
+
+  const monthHeadCells = [];
+  for (let m0 = 0; m0 < 12; m0++) {
+    const mh = new Date(y, m0, 1).toLocaleDateString("de-DE", { month: "short" });
+    monthHeadCells.push(`<th scope="col" class="urlaub-year-th">${escapeHtml(mh)}</th>`);
+  }
+
+  const yearSummaryRows = employees
+    .map((emp) => {
+      const cells = [];
+      for (let m0 = 0; m0 < 12; m0++) {
+        const { start: ms, end: me } = monthRangeISO(y, m0);
+        const n = countVacationDaysInWindow(emp, ms, me);
+        cells.push(`<td class="urlaub-summary__num">${n}</td>`);
+      }
+      const yTotal = countVacationDaysInWindow(emp, `${y}-01-01`, `${y}-12-31`);
+      return `<tr>
+        <td>${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td>
+        ${cells.join("")}
+        <td class="urlaub-summary__num urlaub-summary__num--sum">${yTotal}</td>
+      </tr>`;
+    })
+    .join("");
 
   root.innerHTML = `<div class="urlaub-plan" style="--urlaub-days:${days}">
     <div class="urlaub-plan__head-row">
       <div class="urlaub-plan__corner">Mitarbeitende/r</div>
-      <div class="urlaub-plan__head-days" style="--urlaub-d:${days}">${headCells.join("")}</div>
+      <div class="urlaub-plan__head-days urlaub-plan--daylines" style="--urlaub-d:${days}">${headCells.join("")}</div>
     </div>
     ${
       rows.length
         ? rows.join("")
         : '<p class="hint urlaub-plan__empty urlaub-plan__empty--block">Keine Einträge für die Filter.</p>'
     }
+    <div class="urlaub-plan__after">
+      <div class="panel urlaub-summary-panel">
+        <h3 class="urlaub-summary__title"><i class="fa-solid fa-calculator"></i> Urlaubstage im Monat (${escapeHtml(monthShortTitle)})</h3>
+        <p class="hint">Kalendertage in allen erfassten Urlaubszeiträumen; überlappende Zeiten zählen nur einmal.</p>
+        <div class="table-wrap">
+          <table class="data-table urlaub-summary-table">
+            <thead><tr><th>Mitarbeitende/r</th><th class="urlaub-summary__num">Tage</th></tr></thead>
+            <tbody>${monthSummaryRows || '<tr><td colspan="2" class="hint">—</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel urlaub-summary-panel">
+        <h3 class="urlaub-summary__title"><i class="fa-solid fa-calendar"></i> Jahresübersicht ${escapeHtml(String(y))}</h3>
+        <p class="hint">Summe pro Kalendermonat für dasselbe Jahr wie oben; letzte Spalte = Summe über das Jahr.</p>
+        <div class="table-wrap urlaub-year-table-wrap">
+          <table class="data-table urlaub-summary-table urlaub-year-table">
+            <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
+            <tbody>${yearSummaryRows || '<tr><td colspan="14" class="hint">—</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 
