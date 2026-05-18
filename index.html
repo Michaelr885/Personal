@@ -560,8 +560,9 @@
               </div>
               <p class="hint">
                 Kalender mit einem Tag pro Spalte (Gantt-ähnlich). Haupt-Urlaub und zusätzliche Zeiträume aus den
-                Stammdaten. In die <strong>freie Fläche</strong> einer Zeile klicken, um Urlaub einzutragen (Dialog).
-                Vorhandene Balken bitte in der <strong>Personalverwaltung</strong> anpassen oder weitere Zeilen dort ergänzen.
+                Stammdaten. <strong>Freie Fläche</strong> in einer Zeile: neuen Urlaub eintragen.
+                <strong>Balken</strong> anklicken: bestehenden Zeitraum bearbeiten. Weitere Zeilen weiterhin in der
+                <strong>Personalverwaltung</strong>.
               </p>
               <div class="toolbar urlaub-toolbar-filters">
                 <label class="field-inline">
@@ -745,6 +746,9 @@
         <p class="hint" id="urlaub-gantt-block-intro"><strong id="urlaub-gantt-block-name"></strong></p>
         <form id="urlaub-gantt-block-form" class="form-grid">
           <input type="hidden" id="urlaub-gantt-block-emp-id" />
+          <input type="hidden" id="urlaub-gantt-block-orig-slot" value="" />
+          <input type="hidden" id="urlaub-gantt-block-orig-von" value="" />
+          <input type="hidden" id="urlaub-gantt-block-orig-bis" value="" />
           <label>
             Von (erster Urlaubstag)
             <input type="date" id="urlaub-gantt-block-von" required />
@@ -753,7 +757,7 @@
             Bis (letzter Urlaubstag, optional)
             <input type="date" id="urlaub-gantt-block-bis" />
           </label>
-          <p class="hint span-2">
+          <p class="hint span-2" id="urlaub-gantt-block-save-hint">
             Wird als <strong>weiterer Urlaubszeitraum</strong> gespeichert (wie in der Personalverwaltung). Leeres
             „Bis“ = offenes Ende ab „Von“.
           </p>

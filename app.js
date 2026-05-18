@@ -346,6 +346,47 @@ function getUrlaubRanges(emp) {
   return ranges;
 }
 
+function bisNormUrlaub(/** @type {string|null|undefined} */ b) {
+  return b == null || b === "" ? null : String(b);
+}
+
+function sameUrlaubSpan(
+  /** @type {string} */ aVon,
+  /** @type {string|null|undefined} */ aBis,
+  /** @type {string} */ bVon,
+  /** @type {string|null|undefined} */ bBis
+) {
+  return aVon === bVon && bisNormUrlaub(aBis) === bisNormUrlaub(bBis);
+}
+
+/**
+ * @param {Employee} emp
+ * @param {string} von
+ * @param {string|null} bis
+ * @param {{ slot: "haupt" | "zusatz"; von: string; bis: string | null } | null} exclude bestehender Eintrag, der beim Speichern ersetzt wird
+ * @returns {string|null} Fehlertext oder null
+ */
+function urlaubDuplicateAgainst(emp, von, bis, exclude) {
+  const bN = bisNormUrlaub(bis);
+  if (emp.Urlaub_ab) {
+    const ma = String(emp.Urlaub_ab);
+    const mb = bisNormUrlaub(emp.Urlaub_bis);
+    const skip =
+      exclude && exclude.slot === "haupt" && sameUrlaubSpan(ma, mb, exclude.von, exclude.bis);
+    if (!skip && sameUrlaubSpan(ma, mb, von, bN)) {
+      return "Dieser Zeitraum ist bereits als Haupt-Urlaub eingetragen.";
+    }
+  }
+  for (const p of normalizeUrlaubPerioden(emp.Urlaub_perioden)) {
+    const skip =
+      exclude && exclude.slot === "zusatz" && sameUrlaubSpan(p.von, p.bis, exclude.von, exclude.bis);
+    if (!skip && sameUrlaubSpan(p.von, p.bis, von, bN)) {
+      return "Dieser Zeitraum ist bereits als weiterer Urlaub eingetragen.";
+    }
+  }
+  return null;
+}
+
 /** @param {string} dayISO @param {Employee} emp */
 function isDayInAnyUrlaubRange(dayISO, emp) {
   return getUrlaubRanges(emp).some((r) => isDayInAbsenceRange(dayISO, r.ab, r.bis));
@@ -651,6 +692,12 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+const URLAUB_GANTT_MODAL_HINT_NEW =
+  "Wird als <strong>weiterer Urlaubszeitraum</strong> gespeichert (wie in der Personalverwaltung). Leeres „Bis“ = offenes Ende ab „Von“.";
+
+const URLAUB_GANTT_MODAL_HINT_EDIT =
+  "Sie bearbeiten einen <strong>bestehenden</strong> Zeitraum (Haupt-Urlaub oder Zusatzeintrag). Leeres „Bis“ = offenes Ende.";
+
 function urlaubPeriodRowTemplate(von = "", bis = "") {
   const v = von ? escapeHtml(von) : "";
   const b = bis ? escapeHtml(bis) : "";
@@ -784,10 +831,18 @@ function dayOfMonthFromISO(iso) {
 
 /**
  * Überlappende Urlaubsbalken auf Zeilen verteilen (grid-row).
- * @param {{ gs: number; ge: number }[]} segs gs erster Tag (1…31), ge exklusiv
+ * @param {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]} segs gs erster Tag (1…31), ge exklusiv
+ * @returns {{ gs: number; ge: number; row: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]}
  */
 function stackVacationBars(segs) {
-  const sorted = segs.map((s) => ({ gs: s.gs, ge: s.ge, row: 1 }));
+  const sorted = segs.map((s) => ({
+    gs: s.gs,
+    ge: s.ge,
+    rangeVon: s.rangeVon,
+    rangeBis: s.rangeBis,
+    slot: s.slot,
+    row: 1,
+  }));
   /** @type {{ gs: number; ge: number }[][]} */
   const byRow = [];
   for (const s of sorted) {
@@ -885,31 +940,45 @@ function renderUrlaubPlan() {
 
   const rows = employees.map((emp) => {
     const ranges = getUrlaubRanges(emp);
-    /** @type {{ gs: number; ge: number }[]} */
+    const hasMain = emp.Urlaub_ab != null && emp.Urlaub_ab !== "";
+    /** @type {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]} */
     const rawSegs = [];
-    for (const r of ranges) {
+    for (let ri = 0; ri < ranges.length; ri++) {
+      const r = ranges[ri];
       const clip = clipUrlaubRangeToMonth(r.ab, r.bis, monthStart, monthEnd);
       if (!clip) continue;
       const gs = dayOfMonthFromISO(clip.start);
       const ge = dayOfMonthFromISO(clip.end) + 1;
-      rawSegs.push({ gs, ge });
+      const isMain = hasMain && ri === 0;
+      const rangeBis = r.bis == null ? "" : String(r.bis);
+      rawSegs.push({
+        gs,
+        ge,
+        rangeVon: r.ab,
+        rangeBis,
+        slot: isMain ? "haupt" : "zusatz",
+      });
     }
     const segs = stackVacationBars(rawSegs);
     const maxRow = segs.length ? Math.max(...segs.map((s) => s.row)) : 1;
     const bars = segs.length
       ? segs
           .map((s) => {
-            const t0 = isoFromYearMonthDay(y, m, s.gs);
-            const t1 = isoFromYearMonthDay(y, m, s.ge - 1);
-            const title = `${formatDateDE(t0)}–${formatDateDE(t1)}`;
-            return `<div class="urlaub-bar" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(title)}"></div>`;
+            const fullTitle =
+              s.rangeBis === ""
+                ? `${formatDateDE(s.rangeVon)}–… (Bearbeiten)`
+                : `${formatDateDE(s.rangeVon)}–${formatDateDE(s.rangeBis)}`;
+            const dbAttr = escapeHtml(s.rangeBis);
+            return `<div class="urlaub-bar" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(
+              fullTitle
+            )}" data-urlaub-slot="${s.slot}" data-urlaub-von="${escapeHtml(s.rangeVon)}" data-urlaub-bis="${dbAttr}"></div>`;
           })
           .join("")
       : '<span class="hint urlaub-plan__empty">kein Urlaub</span>';
     const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
     return `<div class="urlaub-plan__row">
       <div class="urlaub-plan__namecell">${name}</div>
-      <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche anklicken: Urlaub eintragen">${bars}</div>
+      <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche: neuen Urlaub eintragen · Balken: bestehenden Zeitraum bearbeiten">${bars}</div>
     </div>`;
   });
 
@@ -1014,13 +1083,29 @@ function setupUrlaubView() {
 }
 
 function closeUrlaubGanttBlockModal() {
+  const slotInp = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"));
+  const vonInp = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-von"));
+  const bisInp = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-bis"));
+  if (slotInp) slotInp.value = "";
+  if (vonInp) vonInp.value = "";
+  if (bisInp) bisInp.value = "";
+  const titleEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-title"));
+  if (titleEl) titleEl.textContent = "Urlaub eintragen";
+  const hintEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-save-hint"));
+  if (hintEl) hintEl.innerHTML = URLAUB_GANTT_MODAL_HINT_NEW;
   const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
   const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
   if (bd) bd.hidden = true;
   if (md) md.hidden = true;
 }
 
-function openUrlaubGanttBlockModal(empId, vonISO, bisISO) {
+/**
+ * @param {number} empId
+ * @param {string} vonISO
+ * @param {string} bisISO Wert fürs Bis-Feld (leer = offenes Ende)
+ * @param {{ slot: "haupt" | "zusatz"; von: string; bis: string | null } | null} [editMeta]
+ */
+function openUrlaubGanttBlockModal(empId, vonISO, bisISO, editMeta = null) {
   const emp = getEmployee(empId);
   if (!emp) return;
   /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-emp-id")).value = String(emp.ID);
@@ -1030,6 +1115,24 @@ function openUrlaubGanttBlockModal(empId, vonISO, bisISO) {
   const bEl = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-bis"));
   if (vEl) vEl.value = vonISO;
   if (bEl) bEl.value = bisISO;
+  const origSlot = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"));
+  const origVon = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-von"));
+  const origBis = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-bis"));
+  const titleEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-title"));
+  const hintEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-save-hint"));
+  if (editMeta) {
+    if (origSlot) origSlot.value = editMeta.slot;
+    if (origVon) origVon.value = editMeta.von;
+    if (origBis) origBis.value = editMeta.bis == null ? "" : String(editMeta.bis);
+    if (titleEl) titleEl.textContent = "Urlaub bearbeiten";
+    if (hintEl) hintEl.innerHTML = URLAUB_GANTT_MODAL_HINT_EDIT;
+  } else {
+    if (origSlot) origSlot.value = "";
+    if (origVon) origVon.value = "";
+    if (origBis) origBis.value = "";
+    if (titleEl) titleEl.textContent = "Urlaub eintragen";
+    if (hintEl) hintEl.innerHTML = URLAUB_GANTT_MODAL_HINT_NEW;
+  }
   const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
   const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
   if (bd) bd.hidden = false;
@@ -1048,7 +1151,21 @@ function setupUrlaubGanttBlockModal() {
     const t = ev.target instanceof Element ? ev.target : null;
     const track = t?.closest(".urlaub-plan__track[data-urlaub-emp]");
     if (!(track instanceof HTMLElement)) return;
-    if (t?.closest(".urlaub-bar")) return;
+    const bar = t?.closest(".urlaub-bar");
+    if (bar instanceof HTMLElement) {
+      const empId = Number(track.dataset.urlaubEmp);
+      const von = bar.getAttribute("data-urlaub-von");
+      const bisRaw = bar.getAttribute("data-urlaub-bis") ?? "";
+      const slot = bar.getAttribute("data-urlaub-slot");
+      if (!Number.isFinite(empId) || !von || (slot !== "haupt" && slot !== "zusatz")) return;
+      const bisNull = bisRaw === "" ? null : bisRaw;
+      openUrlaubGanttBlockModal(empId, von, bisRaw, {
+        slot: /** @type {"haupt" | "zusatz"} */ (slot),
+        von,
+        bis: bisNull,
+      });
+      return;
+    }
     const empId = Number(track.dataset.urlaubEmp);
     const days = Number(track.dataset.urlaubDays);
     const y = Number(track.dataset.urlaubY);
@@ -1094,20 +1211,65 @@ function setupUrlaubGanttBlockModal() {
     const idx = state.employees.findIndex((e) => Number(e.ID) === empId);
     if (idx < 0) return;
     const emp = state.employees[idx];
-    const period = /** @type {Urlaubsperiode} */ ({ von: vAb, bis: vBis });
-    const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
-    const dup = normalized.some((p) => p.von === period.von && (p.bis ?? null) === (period.bis ?? null));
-    if (dup) {
-      await openModal(
-        "Hinweis",
-        "<div>Dieser Zeitraum ist bereits als weiterer Urlaub eingetragen.</div>",
-        { variant: "info", confirmText: "Verstanden" }
-      );
+    const origSlot = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"))?.value ?? "";
+    const origVon = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-von"))?.value?.trim() ?? "";
+    const origBisRaw = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-bis"))?.value?.trim() ?? "";
+    const isEdit = origSlot === "haupt" || origSlot === "zusatz";
+    const origBisNull = origBisRaw === "" ? null : origBisRaw;
+    const dupExclude =
+      isEdit && origVon
+        ? /** @type {{ slot: "haupt" | "zusatz"; von: string; bis: string | null }} */ ({
+            slot: /** @type {"haupt" | "zusatz"} */ (origSlot),
+            von: origVon,
+            bis: origBisNull,
+          })
+        : null;
+    const dupMsg = urlaubDuplicateAgainst(emp, vAb, vBis, dupExclude);
+    if (dupMsg) {
+      await openModal("Hinweis", `<div>${escapeHtml(dupMsg)}</div>`, { variant: "info", confirmText: "Verstanden" });
       return;
     }
-    recordUndoSnapshot();
-    normalized.push(period);
-    emp.Urlaub_perioden = normalized;
+    if (isEdit) {
+      if (!origVon) {
+        await openModal("Hinweis", "<div>Ungültiger Bearbeitungsmodus.</div>", { variant: "info", confirmText: "Verstanden" });
+        return;
+      }
+      if (origSlot === "haupt") {
+        if (String(emp.Urlaub_ab || "") !== origVon || bisNormUrlaub(emp.Urlaub_bis) !== bisNormUrlaub(origBisNull)) {
+          await openModal(
+            "Hinweis",
+            "<div>Der Haupt-Urlaub wurde zwischenzeitlich geändert. Bitte die Ansicht aktualisieren (z. B. Monat wechseln).</div>",
+            { variant: "info", confirmText: "Verstanden" }
+          );
+          return;
+        }
+        recordUndoSnapshot();
+        emp.Urlaub_ab = vAb;
+        emp.Urlaub_bis = vBis;
+      } else {
+        const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+        const oi = normalized.findIndex(
+          (p) => p.von === origVon && bisNormUrlaub(p.bis) === bisNormUrlaub(origBisNull)
+        );
+        if (oi < 0) {
+          await openModal(
+            "Hinweis",
+            "<div>Dieser Zusatz-Zeitraum wurde zwischenzeitlich entfernt oder geändert.</div>",
+            { variant: "info", confirmText: "Verstanden" }
+          );
+          return;
+        }
+        recordUndoSnapshot();
+        normalized[oi] = { von: vAb, bis: vBis };
+        emp.Urlaub_perioden = normalized;
+      }
+    } else {
+      recordUndoSnapshot();
+      const period = /** @type {Urlaubsperiode} */ ({ von: vAb, bis: vBis });
+      const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+      normalized.push(period);
+      emp.Urlaub_perioden = normalized;
+    }
     syncLegacyAbsenceFields(emp);
     state.employees[idx] = emp;
     await syncEmployeesThenPersist();

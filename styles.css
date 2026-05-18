@@ -1325,6 +1325,7 @@ textarea {
   border-radius: 4px;
   min-height: 13px;
   margin: 0 1px;
+  cursor: pointer;
 }
 
 .urlaub-plan__after {
