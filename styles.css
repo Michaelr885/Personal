@@ -581,6 +581,8 @@ code {
   margin: 0;
   padding: 1rem 1.1rem 0.25rem;
   line-height: 1.55;
+  color: var(--text);
+  min-height: 2.5rem;
 }
 
 .modal__card--warn .modal__actions {
@@ -798,6 +800,12 @@ textarea {
   color: var(--status-urlaub);
 }
 
+/* Erzwingt zuverlässiges Ausblenden trotz fremder Stylesheets (z. B. Gantt) */
+.modal-backdrop[hidden],
+.modal[hidden] {
+  display: none !important;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -812,9 +820,11 @@ textarea {
   place-items: center;
   z-index: 50;
   padding: 1rem;
+  pointer-events: none;
 }
 
 .modal__card {
+  pointer-events: auto;
   background: var(--surface);
   border-radius: var(--radius);
   padding: 1.25rem 1.35rem;

@@ -163,14 +163,29 @@ function validateAssignmentForSave(employeeId, start, end) {
 
 function openAssignmentConflictModal(employeeFullName) {
   return new Promise((resolve) => {
-    const backdrop = /** @type {HTMLElement} */ ($("#assign-conflict-backdrop"));
-    const modal = /** @type {HTMLElement} */ ($("#assign-conflict-modal"));
-    const cancelBtn = /** @type {HTMLButtonElement} */ ($("#assign-conflict-cancel"));
-    const confirmBtn = /** @type {HTMLButtonElement} */ ($("#assign-conflict-confirm"));
-    const body = /** @type {HTMLElement} */ ($("#assign-conflict-body"));
-    body.textContent = `Achtung: ${employeeFullName} ist im gewählten Zeitraum bereits in einem anderen Projekt eingeteilt oder abwesend. Möchtest du ihn trotzdem zuweisen?`;
+    const backdrop = /** @type {HTMLElement | null} */ ($("#assign-conflict-backdrop"));
+    const modal = /** @type {HTMLElement | null} */ ($("#assign-conflict-modal"));
+    const cancelBtn = /** @type {HTMLButtonElement | null} */ ($("#assign-conflict-cancel"));
+    const confirmBtn = /** @type {HTMLButtonElement | null} */ ($("#assign-conflict-confirm"));
+    const body = /** @type {HTMLElement | null} */ ($("#assign-conflict-body"));
+    if (!backdrop || !modal || !cancelBtn || !confirmBtn || !body) {
+      console.error("Konflikt-Modal: erwartete DOM-Elemente fehlen.");
+      resolve(false);
+      return;
+    }
+    const nameSafe = String(employeeFullName ?? "").trim() || "Mitarbeiter";
+    body.textContent = `Achtung: ${nameSafe} ist im gewählten Zeitraum bereits in einem anderen Projekt eingeteilt oder abwesend. Möchtest du ihn trotzdem zuweisen?`;
+
     backdrop.hidden = false;
     modal.hidden = false;
+
+    const onBackdropMouseDown = (ev) => {
+      if (ev.target === backdrop) {
+        cleanup();
+        resolve(false);
+      }
+    };
+
     const onCancel = () => {
       cleanup();
       resolve(false);
@@ -179,12 +194,16 @@ function openAssignmentConflictModal(employeeFullName) {
       cleanup();
       resolve(true);
     };
+
     function cleanup() {
+      backdrop.removeEventListener("mousedown", onBackdropMouseDown);
       cancelBtn.removeEventListener("click", onCancel);
       confirmBtn.removeEventListener("click", onConfirm);
       backdrop.hidden = true;
       modal.hidden = true;
     }
+
+    backdrop.addEventListener("mousedown", onBackdropMouseDown);
     cancelBtn.addEventListener("click", onCancel);
     confirmBtn.addEventListener("click", onConfirm);
   });
@@ -678,6 +697,21 @@ async function submitAssignment(employeeId, projectId, start, end) {
   await pushAssignmentAndRefresh(employeeId, projectId, start, end);
 }
 
+function closeAllModalsAndBackdrops() {
+  const ids = [
+    "modal-backdrop",
+    "modal",
+    "dnd-modal-backdrop",
+    "dnd-assign-modal",
+    "assign-conflict-backdrop",
+    "assign-conflict-modal",
+  ];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+}
+
 function setupProjectsInteractions() {
   const qualSelect = /** @type {HTMLSelectElement} */ ($("#filter-qualification"));
   const projSelect = /** @type {HTMLSelectElement} */ ($("#project-select"));
@@ -705,21 +739,23 @@ function setupProjectsInteractions() {
     ev.dataTransfer.effectAllowed = "copy";
   });
 
-  rightPanel.addEventListener("dragover", (ev) => {
-    ev.preventDefault();
-    rightPanel.classList.add("drop-target");
-    ev.dataTransfer.dropEffect = "copy";
-  });
-  rightPanel.addEventListener("dragleave", () => {
-    rightPanel.classList.remove("drop-target");
-  });
-  rightPanel.addEventListener("drop", (ev) => {
-    ev.preventDefault();
-    rightPanel.classList.remove("drop-target");
-    const id = ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("text/employee-id");
-    if (!id) return;
-    /** @type {HTMLSelectElement} */ ($("#assign-employee")).value = id;
-  });
+  if (rightPanel) {
+    rightPanel.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      rightPanel.classList.add("drop-target");
+      ev.dataTransfer.dropEffect = "copy";
+    });
+    rightPanel.addEventListener("dragleave", () => {
+      rightPanel.classList.remove("drop-target");
+    });
+    rightPanel.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      rightPanel.classList.remove("drop-target");
+      const id = ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("text/employee-id");
+      if (!id) return;
+      /** @type {HTMLSelectElement} */ ($("#assign-employee")).value = id;
+    });
+  }
 
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -983,6 +1019,7 @@ function setupFileLinking() {
 }
 
 function boot() {
+  closeAllModalsAndBackdrops();
   state = null;
   setupNavigation();
   setupProjectsInteractions();
@@ -993,4 +1030,18 @@ function boot() {
   setNavEnabled(false);
 }
 
-document.addEventListener("DOMContentLoaded", boot);
+function startApp() {
+  try {
+    boot();
+  } catch (err) {
+    console.error(err);
+    const msg = err && typeof err === "object" && "message" in err ? String(/** @type {{message:string}} */ (err).message) : String(err);
+    window.alert(`Die Anwendung konnte nicht starten: ${msg}`);
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startApp, { once: true });
+} else {
+  startApp();
+}
