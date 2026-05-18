@@ -222,10 +222,10 @@
                 <h2><i class="fa-solid fa-people-roof"></i> Teamleitende</h2>
               </div>
               <p class="hint">
-                Teamleitende steuern die farbigen Teamkarten im Dashboard. Sie können jederzeit
-                angelegt oder entfernt werden. Die Zuordnung eines Mitarbeitenden zu einer
-                Teamleitung ist <strong>optional</strong> – ohne Zuordnung erscheint die Person dort
-                unter „Ohne Teamleitung“.
+                Teamleitende steuern die farbigen Teamkarten im Dashboard. Pro Teamleitung können Sie eine
+                <strong>Abteilung</strong> setzen (Bearbeiten-Stift). Die Zuordnung eines Mitarbeitenden zu einer
+                Teamleitung ist <strong>optional</strong> – ohne Zuordnung erscheint die Person dort unter
+                „Ohne Teamleitung“.
               </p>
               <div class="table-wrap">
                 <table class="data-table" id="teamleaders-table" aria-label="Teamleitende">
@@ -233,6 +233,7 @@
                     <tr>
                       <th>Name</th>
                       <th>Farbe</th>
+                      <th>Abteilung</th>
                       <th>Mitarbeitende</th>
                       <th>Aktionen</th>
                     </tr>
@@ -244,6 +245,15 @@
                 <label class="span-2">
                   Name
                   <input type="text" id="new-tl-name" required maxlength="120" autocomplete="organization" />
+                </label>
+                <label>
+                  Abteilung
+                  <select id="new-tl-abteilung" required>
+                    <option>Mechanik</option>
+                    <option>Steriltechnik</option>
+                    <option>Kunststofftechnik und Gewerbe</option>
+                    <option>Rohrfertigung</option>
+                  </select>
                 </label>
                 <label>
                   Team-Farbe (Dashboard)
@@ -818,6 +828,46 @@
           </div>
           <div class="modal__actions span-2 modal__actions--start">
             <button type="button" class="btn" id="project-form-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn--primary">
+              <i class="fa-solid fa-floppy-disk"></i> Speichern
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="teamleader-modal-backdrop" class="modal-backdrop" hidden></div>
+    <div
+      id="teamleader-modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="teamleader-modal-title"
+      hidden
+    >
+      <div class="modal__card modal__card--compact">
+        <h2 id="teamleader-modal-title">Teamleitung bearbeiten</h2>
+        <form id="teamleader-edit-form" class="form-grid">
+          <input type="hidden" id="teamleader-form-id" value="" />
+          <label class="span-2">
+            Name
+            <input type="text" id="teamleader-form-name" required maxlength="120" autocomplete="organization" />
+          </label>
+          <label>
+            Abteilung
+            <select id="teamleader-form-abteilung" required>
+              <option>Mechanik</option>
+              <option>Steriltechnik</option>
+              <option>Kunststofftechnik und Gewerbe</option>
+              <option>Rohrfertigung</option>
+            </select>
+          </label>
+          <label>
+            Team-Farbe (Dashboard)
+            <input type="color" id="teamleader-form-color" value="#64748b" />
+          </label>
+          <div class="modal__actions span-2 modal__actions--start">
+            <button type="button" class="btn" id="teamleader-form-cancel">Abbrechen</button>
             <button type="submit" class="btn btn--primary">
               <i class="fa-solid fa-floppy-disk"></i> Speichern
             </button>

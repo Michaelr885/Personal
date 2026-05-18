@@ -7,7 +7,7 @@ import {
 
 /** @typedef {{ von: string, bis: string|null }} Urlaubsperiode */
 /** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_perioden: Urlaubsperiode[] }} Employee */
-/** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
+/** @typedef {{ ID:number, Name:string, Team_Farbe:string, Abteilung:string, Reihenfolge:number }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
 
@@ -457,6 +457,35 @@ function getProject(id) {
 function getTeamLeader(id) {
   if (!state) return undefined;
   return state.team_leaders.find((t) => Number(t.ID) === Number(id));
+}
+
+function teamLeadersSortedForDashboard() {
+  if (!state) return [];
+  return [...state.team_leaders].sort((a, b) => {
+    const ra = Number(a.Reihenfolge);
+    const rb = Number(b.Reihenfolge);
+    const oa = Number.isFinite(ra) ? ra : 1e9;
+    const ob = Number.isFinite(rb) ? rb : 1e9;
+    if (oa !== ob) return oa - ob;
+    return Number(a.ID) - Number(b.ID);
+  });
+}
+
+function reorderTeamLeadersOnDashboard(fromIdStr, toIdStr) {
+  if (!state) return;
+  const fromId = Number(fromIdStr);
+  const toId = Number(toIdStr);
+  if (!Number.isFinite(fromId) || !Number.isFinite(toId) || fromId === toId) return;
+  const sorted = teamLeadersSortedForDashboard();
+  const fromIdx = sorted.findIndex((t) => Number(t.ID) === fromId);
+  const toIdx = sorted.findIndex((t) => Number(t.ID) === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = sorted.splice(fromIdx, 1);
+  sorted.splice(toIdx, 0, moved);
+  sorted.forEach((t, i) => {
+    const live = state.team_leaders.find((x) => Number(x.ID) === Number(t.ID));
+    if (live) live.Reihenfolge = i;
+  });
 }
 
 function employeeActiveOnProjectToday(empId) {
@@ -1806,6 +1835,9 @@ function applyDashboardDragMode(root) {
   root.querySelectorAll("[data-dashboard-employee]").forEach((el) => {
     if (el instanceof HTMLElement) el.draggable = native;
   });
+  root.querySelectorAll("[data-dashboard-team-card]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = native;
+  });
 }
 
 function renderDashboard() {
@@ -1830,7 +1862,7 @@ function renderDashboard() {
           )
           .join("")}</div>`;
 
-  const teamCards = state.team_leaders
+  const teamCards = teamLeadersSortedForDashboard()
     .map((tl) => {
       const members = state.employees.filter(
         (e) => Number(e.Teamleiter_ID) === Number(tl.ID)
@@ -1859,11 +1891,12 @@ function renderDashboard() {
           </li>`;
         })
         .join("");
-      return `<article class="panel card-team team-drop-zone" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
+      const abt = normalizeAbteilung(tl.Abteilung);
+      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}" title="Teamkarte auf eine andere Karte ziehen, um die Reihenfolge zu ändern">
         <div class="card-team__title">
           <strong>${escapeHtml(tl.Name)}</strong>
-          <span class="badge">${assignedCount} heute im Projekt</span>
         </div>
+        <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
         <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
@@ -1958,7 +1991,16 @@ function renderDashboard() {
       </p>
       ${unassignedChips}
     </div>
-    <div class="grid-dashboard">${teamCards}</div>
+    <div class="panel dashboard-teams-wrap">
+      <div class="panel__head">
+        <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
+        <p class="hint">
+          Jede Karte steht für eine Teamleitung und deren Abteilung. Ziehen Sie eine Karte auf eine andere,
+          um die <strong>Anzeigereihenfolge</strong> im Dashboard zu ändern (nicht die Teamzuordnung der Mitarbeitenden).
+        </p>
+      </div>
+      <div class="grid-dashboard">${teamCards}</div>
+    </div>
     <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
       <div class="panel__head">
         <h2><i class="fa-solid fa-user-injured"></i> Abwesenheit melden</h2>
@@ -2807,6 +2849,8 @@ function closeAllModalsAndBackdrops() {
     "dash-abs-modal",
     "project-modal-backdrop",
     "project-modal",
+    "teamleader-modal-backdrop",
+    "teamleader-modal",
   ];
   for (const id of ids) {
     const el = document.getElementById(id);
@@ -3054,18 +3098,21 @@ function statusCellClass(status) {
 function renderTeamLeadersTable() {
   if (!state) return;
   const tbody = /** @type {HTMLElement} */ ($("#teamleaders-tbody"));
-  const rows = state.team_leaders
+  const rows = teamLeadersSortedForDashboard()
     .map((tl) => {
       const count = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID)).length;
       const col = sanitizeTeamColor(tl.Team_Farbe);
+      const abt = normalizeAbteilung(tl.Abteilung);
       return `<tr>
         <td>${escapeHtml(tl.Name)}</td>
         <td>
           <span class="tl-color-dot" style="--tl-dot:${col}" title="${escapeHtml(col)}"></span>
           <code>${escapeHtml(col)}</code>
         </td>
+        <td>${escapeHtml(abt)}</td>
         <td>${count}</td>
         <td class="actions-cell">
+          <button type="button" class="btn btn--icon btn--ghost" data-edit-tl="${tl.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
           <button type="button" class="btn btn--icon btn--delete-icon" data-delete-tl="${tl.ID}" title="Teamleiter/in löschen" aria-label="Teamleiter/in löschen"><i class="fa-solid fa-trash-can"></i></button>
         </td>
       </tr>`;
@@ -3073,7 +3120,16 @@ function renderTeamLeadersTable() {
     .join("");
   tbody.innerHTML =
     rows ||
-    '<tr><td colspan="4" class="hint">Noch keine Teamleitenden. Legen Sie unten eine Person an.</td></tr>';
+    '<tr><td colspan="5" class="hint">Noch keine Teamleitenden. Legen Sie unten eine Person an.</td></tr>';
+
+  tbody.querySelectorAll("[data-edit-tl]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = Number(/** @type {HTMLElement} */ (btn).dataset.editTl);
+      if (!state || !Number.isFinite(id)) return;
+      const tl = getTeamLeader(id);
+      if (tl) openTeamLeaderEditModal(tl);
+    });
+  });
 
   tbody.querySelectorAll("[data-delete-tl]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -3097,6 +3153,12 @@ function renderTeamLeadersTable() {
         if (Number(e.Teamleiter_ID) === id) e.Teamleiter_ID = null;
       }
       state.team_leaders = state.team_leaders.filter((t) => Number(t.ID) !== id);
+      state.team_leaders.sort(
+        (a, b) => Number(a.Reihenfolge) - Number(b.Reihenfolge) || Number(a.ID) - Number(b.ID)
+      );
+      state.team_leaders.forEach((t, i) => {
+        t.Reihenfolge = i;
+      });
       await persist();
       renderPersonnelView();
       renderDashboard();
@@ -3287,8 +3349,11 @@ function fillNewEmployeeSelects() {
   if (!state) return;
   /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML =
     '<option value="">Keine Teamleitung</option>' +
-    state.team_leaders
-      .map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`)
+    teamLeadersSortedForDashboard()
+      .map((t) => {
+        const abt = normalizeAbteilung(t.Abteilung);
+        return `<option value="${t.ID}">${escapeHtml(t.Name)} (${escapeHtml(abt)})</option>`;
+      })
       .join("");
 }
 
@@ -3304,9 +3369,40 @@ function fillQualificationSelects() {
 function fillTeamLeaderSelect() {
   if (!state) return;
   const sel = /** @type {HTMLSelectElement} */ ($("#emp-tl"));
+  const sorted = teamLeadersSortedForDashboard();
   sel.innerHTML =
     '<option value="">Keine Teamleitung</option>' +
-    state.team_leaders.map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`).join("");
+    sorted
+      .map((t) => {
+        const abt = normalizeAbteilung(t.Abteilung);
+        return `<option value="${t.ID}">${escapeHtml(t.Name)} (${escapeHtml(abt)})</option>`;
+      })
+      .join("");
+}
+
+function fillTeamleaderAbteilungSelect(selectEl, currentAbteilung) {
+  const sel = typeof selectEl === "string" ? $(selectEl) : selectEl;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const v = normalizeAbteilung(currentAbteilung);
+  sel.innerHTML = ABTEILUNGEN.map(
+    (a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`
+  ).join("");
+  sel.value = v;
+}
+
+function openTeamLeaderEditModal(tl) {
+  if (!tl) return;
+  /** @type {HTMLInputElement} */ ($("#teamleader-form-id")).value = String(tl.ID);
+  /** @type {HTMLInputElement} */ ($("#teamleader-form-name")).value = tl.Name;
+  /** @type {HTMLInputElement} */ ($("#teamleader-form-color")).value = sanitizeTeamColor(tl.Team_Farbe);
+  fillTeamleaderAbteilungSelect("#teamleader-form-abteilung", tl.Abteilung);
+  /** @type {HTMLElement} */ ($("#teamleader-modal-backdrop")).hidden = false;
+  /** @type {HTMLElement} */ ($("#teamleader-modal")).hidden = false;
+}
+
+function closeTeamLeaderEditModal() {
+  /** @type {HTMLElement} */ ($("#teamleader-modal-backdrop")).hidden = true;
+  /** @type {HTMLElement} */ ($("#teamleader-modal")).hidden = true;
 }
 
 function fillPersonnelStufeFilter() {
@@ -3328,6 +3424,7 @@ function renderPersonnelView() {
   fillPersonnelStufeFilter();
   renderTeamLeadersTable();
   renderPersonnelTable();
+  fillTeamleaderAbteilungSelect("#new-tl-abteilung", ABTEILUNGEN[0]);
   syncEditAbsenceHint();
   syncNewAbsenceHint();
   if ($("#view-urlaub")?.classList?.contains("view--active")) {
@@ -3532,11 +3629,14 @@ function setupPersonnelInteractions() {
     const name = /** @type {HTMLInputElement} */ ($("#new-tl-name")).value.trim();
     if (!name) return;
     const colorIn = /** @type {HTMLInputElement} */ ($("#new-tl-color")).value;
+    const maxR = state.team_leaders.reduce((m, t) => Math.max(m, Number(t.Reihenfolge) || 0), -1);
     recordUndoSnapshot();
     state.team_leaders.push({
       ID: nextId(state.team_leaders),
       Name: name,
       Team_Farbe: sanitizeTeamColor(colorIn),
+      Abteilung: normalizeAbteilung(/** @type {HTMLSelectElement} */ ($("#new-tl-abteilung")).value),
+      Reihenfolge: maxR + 1,
     });
     await persist();
     /** @type {HTMLFormElement} */ ($("#new-teamleader-form")).reset();
@@ -3547,6 +3647,44 @@ function setupPersonnelInteractions() {
       renderProjectsView();
     }
   });
+
+  const tlBackdrop = /** @type {HTMLElement | null} */ ($("#teamleader-modal-backdrop"));
+  if (tlBackdrop && tlBackdrop.dataset.bound !== "1") {
+    tlBackdrop.dataset.bound = "1";
+    tlBackdrop.addEventListener("click", closeTeamLeaderEditModal);
+  }
+  const tlCancel = /** @type {HTMLButtonElement | null} */ ($("#teamleader-form-cancel"));
+  if (tlCancel && tlCancel.dataset.bound !== "1") {
+    tlCancel.dataset.bound = "1";
+    tlCancel.addEventListener("click", closeTeamLeaderEditModal);
+  }
+  const tlForm = /** @type {HTMLFormElement | null} */ (document.getElementById("teamleader-edit-form"));
+  if (tlForm && tlForm.dataset.bound !== "1") {
+    tlForm.dataset.bound = "1";
+    tlForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!state) return;
+      const idRaw = /** @type {HTMLInputElement} */ ($("#teamleader-form-id")).value.trim();
+      const tl = getTeamLeader(idRaw);
+      if (!tl) {
+        closeTeamLeaderEditModal();
+        return;
+      }
+      const name = /** @type {HTMLInputElement} */ ($("#teamleader-form-name")).value.trim();
+      if (!name) return;
+      recordUndoSnapshot();
+      tl.Name = name;
+      tl.Team_Farbe = sanitizeTeamColor(/** @type {HTMLInputElement} */ ($("#teamleader-form-color")).value);
+      tl.Abteilung = normalizeAbteilung(/** @type {HTMLSelectElement} */ ($("#teamleader-form-abteilung")).value);
+      await persist();
+      closeTeamLeaderEditModal();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+    });
+  }
 }
 
 function setNavEnabled(enabled) {
@@ -4066,17 +4204,28 @@ function setupDashboardDnD() {
         break;
       }
     }
-    if (!row) return;
-    const id = row.getAttribute("data-dashboard-employee");
-    if (!id) return;
-    row.classList.add("dashboard-emp-dragging");
-    ev.dataTransfer.setData("text/plain", id);
-    ev.dataTransfer.setData("application/x-employee-id", id);
-    ev.dataTransfer.effectAllowed = "move";
+    if (row) {
+      const id = row.getAttribute("data-dashboard-employee");
+      if (!id) return;
+      row.classList.add("dashboard-emp-dragging");
+      ev.dataTransfer.setData("text/plain", id);
+      ev.dataTransfer.setData("application/x-employee-id", id);
+      ev.dataTransfer.effectAllowed = "move";
+      return;
+    }
+    const teamCard = ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-card]") : null;
+    if (teamCard instanceof HTMLElement) {
+      const tid = teamCard.getAttribute("data-dashboard-team-card");
+      if (!tid) return;
+      teamCard.classList.add("card-team--reorder-drag");
+      ev.dataTransfer.setData("application/x-teamleader-reorder", tid);
+      ev.dataTransfer.effectAllowed = "move";
+    }
   });
 
   view.addEventListener("dragend", () => {
     view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
+    view.querySelectorAll(".card-team--reorder-drag").forEach((el) => el.classList.remove("card-team--reorder-drag"));
   });
 
   view.addEventListener("dragenter", (ev) => {
@@ -4119,6 +4268,23 @@ function setupDashboardDnD() {
   view.addEventListener("drop", async (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
     ev.preventDefault();
+    const tlReorder = ev.dataTransfer.getData("application/x-teamleader-reorder");
+    if (tlReorder && state) {
+      clearDashboardDropZoneHighlight();
+      const targetCard = el?.closest("[data-dashboard-team-card]");
+      const toId = targetCard?.getAttribute("data-dashboard-team-card");
+      if (toId && toId !== tlReorder) {
+        recordUndoSnapshot();
+        reorderTeamLeadersOnDashboard(tlReorder, toId);
+        await persist();
+        renderDashboard();
+        if ($("#view-personnel").classList.contains("view--active")) {
+          renderPersonnelView();
+        }
+      }
+      return;
+    }
+
     const empId =
       ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
     if (!empId || !state) {

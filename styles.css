@@ -255,6 +255,29 @@ code {
   gap: 1rem;
 }
 
+.dashboard-teams-wrap .grid-dashboard {
+  margin-top: 0.35rem;
+}
+
+.card-team__meta {
+  margin: 0.1rem 0 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+#view-dashboard [data-dashboard-team-card] {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.card-team.card-team--reorder-drag {
+  opacity: 0.88;
+  outline: 2px dashed var(--primary);
+  outline-offset: 2px;
+}
+
 /* Dashboard: ohne Teamleitung + Drag & Drop */
 .panel--unassigned {
   border-style: dashed;
