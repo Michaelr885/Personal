@@ -1237,6 +1237,12 @@ textarea {
   fill: rgba(255, 255, 255, 0.35);
 }
 
+/* Zusatz-Labels (app.js): Namen entlang des Balkens, Klicks gehen an den Balken */
+.gantt .bar-label--repeat {
+  pointer-events: none;
+  user-select: none;
+}
+
 .urlaub-perioden-host .urlaub-per-row {
   padding-top: 0.35rem;
   margin-top: 0.35rem;
