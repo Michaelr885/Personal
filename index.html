@@ -95,10 +95,48 @@
 
           <section id="view-projects" class="view" hidden aria-labelledby="page-title">
             <div class="panel gantt-panel">
-              <div class="panel__head">
+              <div class="panel__head panel__head--wrap gantt-panel__head">
                 <h2><i class="fa-solid fa-diagram-project"></i> Projekt-Zeitleiste (Gantt)</h2>
+                <div class="btn-group btn-group--toggle" role="group" aria-label="Gantt-Zeitraster">
+                  <button type="button" class="btn btn--small" data-gantt-mode="Day" title="Tagesraster">
+                    Tag
+                  </button>
+                  <button type="button" class="btn btn--small" data-gantt-mode="Week" title="Wochenraster">
+                    Woche
+                  </button>
+                  <button type="button" class="btn btn--small is-active" data-gantt-mode="Month" title="Monatsraster">
+                    Monat
+                  </button>
+                </div>
               </div>
               <div id="gantt-container" class="gantt-wrap"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head panel__head--wrap">
+                <h2><i class="fa-solid fa-folder-tree"></i> Projekte verwalten</h2>
+                <button type="button" class="btn btn--primary" id="btn-new-project">
+                  <i class="fa-solid fa-plus"></i> Neues Projekt
+                </button>
+              </div>
+              <p class="hint">
+                Projekte steuern die Gantt-Zeitleiste und die Ablagekarten. Qualifikationen als JSON-Objekt
+                (z. B. <code>{"Monteur":2,"Schweißer":1}</code>) im Bearbeiten-Dialog.
+              </p>
+              <div class="table-wrap">
+                <table class="data-table" id="projects-table" aria-label="Projekte">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Start</th>
+                      <th>Ende</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="projects-tbody"></tbody>
+                </table>
+              </div>
             </div>
 
             <div class="panel panel--drop-hint">
@@ -530,6 +568,50 @@
           </label>
           <div class="modal__actions span-2 modal__actions--start">
             <button type="button" class="btn" id="dash-abs-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn--primary">
+              <i class="fa-solid fa-floppy-disk"></i> Speichern
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="project-modal-backdrop" class="modal-backdrop" hidden></div>
+    <div
+      id="project-modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="project-modal-title"
+      hidden
+    >
+      <div class="modal__card modal__card--compact">
+        <h2 id="project-modal-title">Projekt</h2>
+        <form id="project-form" class="form-grid">
+          <input type="hidden" id="project-form-id" value="" />
+          <label class="span-2">
+            Projektname
+            <input type="text" id="project-form-name" required maxlength="200" autocomplete="off" />
+          </label>
+          <label>
+            Startdatum
+            <input type="date" id="project-form-start" required />
+          </label>
+          <label>
+            Enddatum
+            <input type="date" id="project-form-end" required />
+          </label>
+          <label class="span-2">
+            Benötigte Qualifikationen (JSON-Objekt)
+            <textarea
+              id="project-form-quals"
+              rows="3"
+              placeholder='{"Monteur":2,"Schweißer":1}'
+              spellcheck="false"
+            ></textarea>
+          </label>
+          <div class="modal__actions span-2 modal__actions--start">
+            <button type="button" class="btn" id="project-form-cancel">Abbrechen</button>
             <button type="submit" class="btn btn--primary">
               <i class="fa-solid fa-floppy-disk"></i> Speichern
             </button>

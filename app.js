@@ -174,6 +174,8 @@ const titles = {
 };
 
 let ganttInstance = null;
+/** @type {"Day"|"Week"|"Month"} */
+let ganttViewMode = "Month";
 
 function todayISO() {
   const d = new Date();
@@ -1073,7 +1075,7 @@ function renderGanttCore() {
   }
   try {
     ganttInstance = new GanttCtor("#gantt-anchor", tasks, {
-      view_mode: "Month",
+      view_mode: ganttViewMode,
       // frappe-gantt 0.6.1: keine Locale "de" (month_names) → sonst TypeError in date_utils
       language: "en",
       date_format: "YYYY-MM-DD",
@@ -1102,6 +1104,96 @@ function renderGantt() {
   } else {
     setTimeout(run, 0);
   }
+}
+
+function syncGanttViewModeButtons() {
+  $all("#view-projects [data-gantt-mode]").forEach((btn) => {
+    const m = /** @type {HTMLElement} */ (btn).dataset.ganttMode;
+    btn.classList.toggle("is-active", m === ganttViewMode);
+  });
+}
+
+/**
+ * @param {"Day"|"Week"|"Month"} mode
+ */
+function setGanttViewMode(mode) {
+  if (mode !== "Day" && mode !== "Week" && mode !== "Month") return;
+  ganttViewMode = mode;
+  if (ganttInstance && typeof ganttInstance.change_view_mode === "function") {
+    try {
+      ganttInstance.change_view_mode(mode);
+    } catch (err) {
+      console.error(err);
+      renderGantt();
+    }
+  } else {
+    renderGantt();
+  }
+  syncGanttViewModeButtons();
+}
+
+/** @param {string} raw */
+function parseProjectQualificationsJson(raw) {
+  const s = String(raw ?? "").trim();
+  if (s === "") return {};
+  const o = JSON.parse(s);
+  if (o == null || typeof o !== "object" || Array.isArray(o)) {
+    throw new Error("Qualifikationen: JSON muss ein Objekt sein.");
+  }
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const [k, v] of Object.entries(o)) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) continue;
+    const key = String(k).trim();
+    if (key) out[key] = Math.floor(n);
+  }
+  return out;
+}
+
+function renderProjectsTable() {
+  if (!state) return;
+  const tbody = /** @type {HTMLElement} */ ($("#projects-tbody"));
+  const rows = state.projects
+    .slice()
+    .sort((a, b) => Number(a.ID) - Number(b.ID))
+    .map(
+      (p) => `<tr>
+        <td>${p.ID}</td>
+        <td>${escapeHtml(p.Name)}</td>
+        <td>${escapeHtml(p.Startdatum)}</td>
+        <td>${escapeHtml(p.Enddatum)}</td>
+        <td class="actions-cell">
+          <button type="button" class="btn btn--icon btn--ghost" data-edit-project="${p.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="btn btn--icon btn--delete-icon" data-delete-project="${p.ID}" title="Projekt löschen" aria-label="Projekt löschen"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+      </tr>`
+    )
+    .join("");
+  tbody.innerHTML =
+    rows || '<tr><td colspan="5" class="hint">Noch keine Projekte. Legen Sie eines an.</td></tr>';
+}
+
+function closeProjectModal() {
+  /** @type {HTMLElement} */ ($("#project-modal-backdrop")).hidden = true;
+  /** @type {HTMLElement} */ ($("#project-modal")).hidden = true;
+}
+
+/** @param {Project | null} proj */
+function openProjectModal(proj) {
+  /** @type {HTMLElement} */ ($("#project-modal-backdrop")).hidden = false;
+  /** @type {HTMLElement} */ ($("#project-modal")).hidden = false;
+  /** @type {HTMLInputElement} */ ($("#project-form-id")).value = proj ? String(proj.ID) : "";
+  /** @type {HTMLInputElement} */ ($("#project-form-name")).value = proj ? proj.Name : "";
+  /** @type {HTMLInputElement} */ ($("#project-form-start")).value = proj ? proj.Startdatum : todayISO();
+  /** @type {HTMLInputElement} */ ($("#project-form-end")).value = proj
+    ? proj.Enddatum
+    : addCalendarDaysToISO(todayISO(), 30) || todayISO();
+  /** @type {HTMLTextAreaElement} */ ($("#project-form-quals")).value = proj
+    ? JSON.stringify(proj.Benötigte_Qualifikationen ?? {}, null, 2)
+    : "{}";
+  $("#project-modal-title").textContent = proj ? "Projekt bearbeiten" : "Neues Projekt";
+  /** @type {HTMLInputElement} */ ($("#project-form-name")).focus();
 }
 
 function uniqueQualifications() {
@@ -1208,6 +1300,10 @@ function renderProjectDetail() {
 function fillAssignmentEmployeeSelect(projectId) {
   if (!state) return;
   const sel = /** @type {HTMLSelectElement} */ ($("#assign-employee"));
+  if (!projectId) {
+    sel.innerHTML = "";
+    return;
+  }
   const inProject = new Set(
     state.assignments
       .filter((a) => Number(a.Project_ID) === Number(projectId))
@@ -1240,10 +1336,17 @@ function renderProjectsView() {
 
   const projSelect = /** @type {HTMLSelectElement} */ ($("#project-select"));
   projSelect.innerHTML = state.projects
-    .map((p) => `<option value="${p.ID}">${p.Name}</option>`)
+    .map((p) => `<option value="${p.ID}">${escapeHtml(p.Name)}</option>`)
     .join("");
 
-  if (!projSelect.value && state.projects[0]) projSelect.value = String(state.projects[0].ID);
+  if (state.projects.length === 0) {
+    projSelect.value = "";
+  } else {
+    const cur = projSelect.value;
+    if (!cur || !state.projects.some((p) => String(p.ID) === cur)) {
+      projSelect.value = String(state.projects[0].ID);
+    }
+  }
 
   renderProjectDropZones();
   renderEmployeePool();
@@ -1256,6 +1359,8 @@ function renderProjectsView() {
     /** @type {HTMLInputElement} */ ($("#assign-end")).value = proj.Enddatum;
   }
 
+  renderProjectsTable();
+  syncGanttViewModeButtons();
   renderGantt();
 }
 
@@ -1298,6 +1403,8 @@ function closeAllModalsAndBackdrops() {
     "assign-conflict-modal",
     "dash-abs-backdrop",
     "dash-abs-modal",
+    "project-modal-backdrop",
+    "project-modal",
   ];
   for (const id of ids) {
     const el = document.getElementById(id);
@@ -1366,6 +1473,123 @@ function setupProjectsInteractions() {
       return;
     }
     await submitAssignment(employeeId, projectId, start, end);
+  });
+
+  const projectsView = /** @type {HTMLElement} */ ($("#view-projects"));
+
+  projectsView.addEventListener("click", async (ev) => {
+    const modeEl = ev.target instanceof Element ? ev.target.closest("[data-gantt-mode]") : null;
+    if (modeEl instanceof HTMLElement && modeEl.dataset.ganttMode) {
+      const m = modeEl.dataset.ganttMode;
+      if (m === "Day" || m === "Week" || m === "Month") setGanttViewMode(m);
+      return;
+    }
+
+    if (ev.target instanceof Element && ev.target.closest("#btn-new-project")) {
+      openProjectModal(null);
+      return;
+    }
+
+    const editBtn = ev.target instanceof Element ? ev.target.closest("[data-edit-project]") : null;
+    if (editBtn instanceof HTMLElement && editBtn.dataset.editProject) {
+      const p = getProject(editBtn.dataset.editProject);
+      if (p) openProjectModal(p);
+      return;
+    }
+
+    const delBtn = ev.target instanceof Element ? ev.target.closest("[data-delete-project]") : null;
+    if (delBtn instanceof HTMLElement && delBtn.dataset.deleteProject) {
+      const pid = Number(delBtn.dataset.deleteProject);
+      const proj = getProject(pid);
+      if (!proj || !state) return;
+      const ok = await openModal(
+        "Projekt löschen",
+        `<div>Das Projekt „${escapeHtml(proj.Name)}“ und alle zugehörigen Zuweisungen werden unwiderruflich entfernt.</div>`,
+        { confirmText: "Ja, löschen", confirmDanger: true }
+      );
+      if (!ok) return;
+      recordUndoSnapshot();
+      state.projects = state.projects.filter((p) => Number(p.ID) !== pid);
+      state.assignments = state.assignments.filter((a) => Number(a.Project_ID) !== pid);
+      await persist();
+      renderProjectsView();
+      renderDashboard();
+    }
+  });
+
+  $("#project-modal-backdrop").addEventListener("click", closeProjectModal);
+  $("#project-form-cancel").addEventListener("click", closeProjectModal);
+
+  /** @type {HTMLFormElement} */ ($("#project-form")).addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const idRaw = /** @type {HTMLInputElement} */ ($("#project-form-id")).value.trim();
+    const name = /** @type {HTMLInputElement} */ ($("#project-form-name")).value.trim();
+    const start = /** @type {HTMLInputElement} */ ($("#project-form-start")).value;
+    const end = /** @type {HTMLInputElement} */ ($("#project-form-end")).value;
+    const qualsRaw = /** @type {HTMLTextAreaElement} */ ($("#project-form-quals")).value;
+    if (!name || !start || !end) return;
+    if (start > end) {
+      await openModal(
+        "Datum ungültig",
+        "<div>Startdatum darf nicht nach dem Enddatum liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    let Benötigte_Qualifikationen;
+    try {
+      Benötigte_Qualifikationen = parseProjectQualificationsJson(qualsRaw);
+    } catch (err) {
+      const detail =
+        err && typeof err === "object" && "message" in err
+          ? String(/** @type {{ message: string }} */ (err).message)
+          : String(err);
+      await openModal(
+        "Qualifikationen",
+        `<div>Bitte gültiges JSON eingeben (Objekt mit Zählungen). ${escapeHtml(detail)}</div>`,
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    if (idRaw !== "") {
+      const idxEarly = state.projects.findIndex((p) => String(p.ID) === idRaw);
+      if (idxEarly < 0) {
+        await openModal(
+          "Projekt",
+          "<div>Dieses Projekt existiert nicht mehr.</div>",
+          { variant: "info", confirmText: "Verstanden" }
+        );
+        closeProjectModal();
+        renderProjectsView();
+        renderDashboard();
+        return;
+      }
+    }
+    recordUndoSnapshot();
+    if (idRaw === "") {
+      state.projects.push({
+        ID: nextId(state.projects),
+        Name: name,
+        Startdatum: start,
+        Enddatum: end,
+        Benötigte_Qualifikationen,
+      });
+    } else {
+      const idx = state.projects.findIndex((p) => String(p.ID) === idRaw);
+      const prev = state.projects[idx];
+      state.projects[idx] = {
+        ...prev,
+        Name: name,
+        Startdatum: start,
+        Enddatum: end,
+        Benötigte_Qualifikationen,
+      };
+    }
+    await persist();
+    closeProjectModal();
+    renderProjectsView();
+    renderDashboard();
   });
 }
 
