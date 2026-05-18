@@ -296,10 +296,13 @@ code {
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
 }
 
-.dashboard-emp-chip__name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  line-height: 1.25;
+.dashboard-emp-abs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  line-height: 1.35;
+  margin-top: 0.05rem;
 }
 
 .team-drop-zone {
@@ -500,13 +503,20 @@ code {
 
 .card-team li {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.35rem 0.45rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  padding: 0.4rem 0.45rem;
   border-radius: 8px;
   background: #f8fafc;
   font-size: 0.9rem;
+}
+
+.dashboard-emp-row__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .tag-mini {
@@ -526,8 +536,10 @@ code {
   color: var(--warning);
   font-size: 0.75rem;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.2rem;
+  max-width: 100%;
 }
 
 .absence-list {
@@ -539,14 +551,36 @@ code {
   gap: 0.45rem;
 }
 
-.absence-list li {
+.absence-list__item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.65rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem;
   border-radius: 10px;
   background: #fffbeb;
   border: 1px solid #fde68a;
+}
+
+.absence-list__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.absence-list__body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.absence-list__period {
+  color: var(--text);
 }
 
 .pill {

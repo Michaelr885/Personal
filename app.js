@@ -276,25 +276,38 @@ function daysUntilISODate(isoStr) {
   return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
+/** ISO-Datum (yyyy-mm-dd) → Anzeige dd.mm.yyyy */
+function formatDateDE(iso) {
+  if (iso == null || iso === "") return "";
+  const parts = String(iso).trim().split("-");
+  if (parts.length < 3) return String(iso);
+  const [y, m, d] = parts;
+  if (!y || !m || !d) return String(iso);
+  return `${d}.${m}.${y}`;
+}
+
 /** Krank/Urlaub: Hinweis bis zum ersten Arbeitstag nach dem letzten Abwesenheitstag (HTML). */
 function absenceReturnBadgeHtml(emp) {
   if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
   const raw = firstWorkdayAfterAbsenceEnd(emp);
+  const de = raw ? formatDateDE(raw) : "";
   if (raw == null || raw === "") {
     return `<span class="tag-mini" title="„Krankheit bis“ bzw. „Urlaub bis“ setzen (letzter freier Tag vor der Rückkehr)">kein Zeitraum-Ende</span>`;
   }
   const d = daysUntilISODate(raw);
-  if (d === null || !Number.isFinite(d)) return "";
+  if (d === null || !Number.isFinite(d)) {
+    return `<span class="tag-mini" title="Erster Arbeitstag nach Abwesenheit"><i class="fa-solid fa-calendar-check"></i> Rückkehr ab ${escapeHtml(de)}</span>`;
+  }
   if (d < 0) {
-    return `<span class="warn-abs" title="Erster Arbeitstag war ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr überfällig</span>`;
+    return `<span class="warn-abs" title="Geplanter erster Arbeitstag ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr <strong>${escapeHtml(de)}</strong> überfällig</span>`;
   }
   if (d === 0) {
-    return `<span class="warn-abs" title="Rückkehr an Arbeit geplant ${escapeHtml(String(raw))}"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute</span>`;
+    return `<span class="warn-abs" title="Rückkehr an Arbeit geplant"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute · <strong>${escapeHtml(de)}</strong></span>`;
   }
   const urgent = d < 30;
   const cls = urgent ? "warn-abs" : "tag-mini";
   const icon = urgent ? "fa-triangle-exclamation" : "fa-calendar-check";
-  return `<span class="${cls}" title="Erster Arbeitstag nach Abwesenheit: ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+  return `<span class="${cls}" title="Erster Arbeitstag nach Abwesenheit: ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> Rückkehr ab <strong>${escapeHtml(de)}</strong> · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
 }
 
 /** Verfügbar: ab 5 Tage vor geplantem Beginn Hinweis (HTML), getrennt für Krank- und Urlaubsplan. */
@@ -309,9 +322,13 @@ function plannedAbsenceBadgeHtml(emp) {
     if (von == null || von === "") continue;
     const d = daysUntilISODate(String(von));
     if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
-    const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
+    const vonDe = formatDateDE(String(von));
+    const bisPart =
+      bis && String(bis) !== String(von)
+        ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
+        : "";
     chunks.push(
-      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid ${icon}"></i> ${label} in ${d} Tag${d === 1 ? "" : "en"}</span>`
+      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
     );
   }
   if (chunks.length) return chunks.join(" ");
@@ -320,8 +337,12 @@ function plannedAbsenceBadgeHtml(emp) {
   const d = daysUntilISODate(String(von));
   if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
   const bis = emp.Abwesenheit_geplant_bis;
-  const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
-  return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+  const vonDe = formatDateDE(String(von));
+  const bisPart =
+    bis && String(bis) !== String(von)
+      ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
+      : "";
+  return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
 }
 
 /** Fließtext für Personal-Tabelle (ohne HTML). */
@@ -375,14 +396,14 @@ function plannedAbsencePoolLine(emp) {
     if (von == null || von === "") continue;
     const d = daysUntilISODate(String(von));
     if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
-    lines.push(`${label} ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`);
+    lines.push(`${label} ab ${formatDateDE(String(von))} · in ${d} Tag${d === 1 ? "" : "en"}`);
   }
   if (lines.length) return lines.join(" · ");
   const von = emp.Abwesenheit_geplant_ab;
   if (von == null || von === "") return "";
   const d = daysUntilISODate(String(von));
   if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
-  return `Abwesenheit ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`;
+  return `Abwesenheit ab ${formatDateDE(String(von))} · in ${d} Tag${d === 1 ? "" : "en"}`;
 }
 
 function readOptionalISODateFromInput(id) {
@@ -607,6 +628,25 @@ function employeesWithoutTeamLeader() {
   return state.employees.filter((e) => !hasValidTeamLeader(e));
 }
 
+/** Abwesenheits-Hinweise für eine Person (Dashboard: Teamkarte & Chip). */
+function dashboardMemberAbsenceBlock(emp) {
+  const ret = absenceReturnBadgeHtml(emp).trim();
+  const plan = plannedAbsenceBadgeHtml(emp).trim();
+  if (!ret && !plan) return "";
+  return `<div class="dashboard-emp-abs">${[ret, plan].filter(Boolean).join(" ")}</div>`;
+}
+
+/** Krank/Urlaub: Abwesenheitszeitraum für die Dashboard-Abwesenheitsliste. */
+function activeAbsencePeriodHtml(emp) {
+  if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
+  const ab = emp.Status === "Krank" ? emp.Krank_ab : emp.Urlaub_ab;
+  const bis = emp.Status === "Krank" ? emp.Krank_bis : emp.Urlaub_bis;
+  if ((!ab || ab === "") && (!bis || bis === "")) return "";
+  const a = ab ? formatDateDE(String(ab)) : "…";
+  const b = bis ? formatDateDE(String(bis)) : "…";
+  return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong></span>`;
+}
+
 function renderDashboard() {
   if (!state) return;
   const root = /** @type {HTMLElement} */ ($("#dashboard-content"));
@@ -618,10 +658,14 @@ function renderDashboard() {
       ? '<p class="hint">Alle Mitarbeitenden haben eine gültige Teamleitung oder sind ohne Teamleitung erfasst.</p>'
       : `<div class="dashboard-chip-row" aria-label="Ohne Teamleitung">${unassigned
           .map(
-            (e) => `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
+            (e) => {
+              const absBlock = dashboardMemberAbsenceBlock(e);
+              return `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
             <span class="dashboard-emp-chip__name">${escapeHtml(e.Vorname)} ${escapeHtml(e.Nachname)}</span>
             <span class="tag-mini">${escapeHtml(e.Qualifikation)}</span>
-          </div>`
+            ${absBlock}
+          </div>`;
+            }
           )
           .join("")}</div>`;
 
@@ -639,15 +683,18 @@ function renderDashboard() {
       ).length;
       const items = members
         .map((m) => {
-          const absenceBadges = `${absenceReturnBadgeHtml(m)} ${plannedAbsenceBadgeHtml(m)}`.trim();
+          const absBlock = dashboardMemberAbsenceBlock(m);
           const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Auf andere Teamkarte oder „Ohne Teamleitung“ ziehen">
-            <span>${m.Vorname} ${m.Nachname} <span class="tag-mini">${m.Qualifikation}</span></span>
+          return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte oder „Ohne Teamleitung“ ziehen">
+            <div class="dashboard-emp-row__top">
+            <span>${escapeHtml(m.Vorname)} ${escapeHtml(m.Nachname)} <span class="tag-mini">${escapeHtml(m.Qualifikation)}</span></span>
             <span>${
               onProject
                 ? '<span class="badge">im Projekt</span>'
                 : '<span class="badge badge--muted">frei</span>'
-            } ${absenceBadges}</span>
+            }</span>
+            </div>
+            ${absBlock}
           </li>`;
         })
         .join("");
@@ -672,8 +719,17 @@ function renderDashboard() {
           e.Status === "Krank"
             ? '<span class="pill pill--krank">Krank</span>'
             : '<span class="pill pill--urlaub">Urlaub</span>';
+        const period = activeAbsencePeriodHtml(e);
         const ret = absenceReturnBadgeHtml(e);
-        return `<li><span>${e.Vorname} ${e.Nachname} ${pill}<br>${ret || '<span class="hint">Zeitraum-Ende (bis) nicht gesetzt</span>'}</span></li>`;
+        return `<li class="absence-list__item">
+          <div class="absence-list__head">
+            <strong>${escapeHtml(`${e.Vorname} ${e.Nachname}`)}</strong> ${pill}
+          </div>
+          <div class="absence-list__body">
+            ${period ? `<div class="absence-list__line">${period}</div>` : ""}
+            <div class="absence-list__line absence-list__line--return">${ret || '<span class="hint">Zeitraum-Ende (bis) nicht gesetzt</span>'}</div>
+          </div>
+        </li>`;
       })
           .join("")}</ul>`;
 
@@ -705,7 +761,7 @@ function renderDashboard() {
     <div class="grid-dashboard">${teamCards}</div>
     <div class="panel">
       <div class="panel__head"><h2><i class="fa-solid fa-bed-pulse"></i> Abwesenheiten</h2></div>
-      <p class="hint">Personen mit Status Krank oder Urlaub erscheinen nicht im verfügbaren Pool der Zeitleisten-Ansicht.</p>
+      <p class="hint">Bei Krankheit oder Urlaub: Abwesenheitszeitraum und geplanter erster Arbeitstag (Rückkehr) stehen unten. Bei Status „Verfügbar“ erscheint auf den Teamkarten ab fünf Tage vor Urlaubs- oder Krankheitsbeginn ein Hinweis mit Datum.</p>
       ${absenceHtml}
     </div>
     <div class="panel">
