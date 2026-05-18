@@ -404,7 +404,7 @@ function renderDashboard() {
         .map((m) => {
           const absenceBadges = `${absenceReturnBadgeHtml(m)} ${plannedAbsenceBadgeHtml(m)}`.trim();
           const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Zu anderer Teamleitung oder in „Ohne Teamleitung“ ziehen">
+          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Auf andere Teamkarte oder „Ohne Teamleitung“ ziehen">
             <span>${m.Vorname} ${m.Nachname} <span class="tag-mini">${m.Qualifikation}</span></span>
             <span>${
               onProject
@@ -419,7 +419,7 @@ function renderDashboard() {
           <strong>${escapeHtml(tl.Name)}</strong>
           <span class="badge">${assignedCount} heute im Projekt</span>
         </div>
-        <div class="hint">Person hierher ziehen, um sie dieser Teamleitung zuzuordnen. Aus der Liste auf „Ohne Teamleitung“ ziehen, um die Zuordnung zu entfernen.</div>
+        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -1258,14 +1258,34 @@ function setupDashboardDnD() {
   view.dataset.dashboardDnd = "1";
 
   view.addEventListener("dragstart", (ev) => {
-    const el = ev.target instanceof Element ? ev.target : null;
-    const row = /** @type {HTMLElement | null} */ (el?.closest("[data-dashboard-employee]"));
+    const path = ev.composedPath();
+    let row = /** @type {HTMLElement | null} */ (null);
+    for (const n of path) {
+      if (n instanceof Element && n.hasAttribute("data-dashboard-employee")) {
+        row = /** @type {HTMLElement} */ (n);
+        break;
+      }
+    }
     if (!row) return;
     const id = row.getAttribute("data-dashboard-employee");
     if (!id) return;
+    row.classList.add("dashboard-emp-dragging");
     ev.dataTransfer.setData("text/plain", id);
     ev.dataTransfer.setData("application/x-employee-id", id);
     ev.dataTransfer.effectAllowed = "move";
+  });
+
+  view.addEventListener("dragend", () => {
+    view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
+  });
+
+  view.addEventListener("dragenter", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const zone = /** @type {HTMLElement | null} */ (
+      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+    );
+    if (!zone) return;
+    ev.preventDefault();
   });
 
   view.addEventListener("dragover", (ev) => {
