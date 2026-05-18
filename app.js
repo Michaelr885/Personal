@@ -1901,14 +1901,13 @@ function renderDashboard() {
         })
         .join("");
       const abt = normalizeAbteilung(tl.Abteilung);
-      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}" title="Personen in der Liste ziehen (Teamzuordnung). Reihenfolge der Karten: Teamnamen-Zeile greifen und auf eine andere Karte ziehen.">
-        <div class="card-team__drag-handle" data-dashboard-team-drag="1" title="Nur diese Zeile greifen und auf eine andere Teamkarte ziehen, um die Anzeigereihenfolge zu ändern">
+      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
+        <div class="card-team__drag-handle" data-dashboard-team-drag="1">
           <div class="card-team__title">
             <strong>${escapeHtml(tl.Name)}</strong>
           </div>
         </div>
         <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
-        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen. <strong>Anzeigereihenfolge</strong> der Karten: den <strong>Teamnamen</strong> (oben) auf eine andere Karte ziehen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -2005,11 +2004,6 @@ function renderDashboard() {
     <div class="panel dashboard-teams-wrap">
       <div class="panel__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
-        <p class="hint">
-          Jede Karte steht für eine Teamleitung und deren Abteilung. Ziehen Sie den <strong>Teamnamen</strong> (Kopfzeile)
-          einer Karte auf eine andere, um die <strong>Anzeigereihenfolge</strong> zu ändern. Mitarbeitende ziehen Sie in der
-          Liste oder von „Ohne Teamleitung“, um die Teamzuordnung zu ändern.
-        </p>
       </div>
       <div class="grid-dashboard">${teamCards}</div>
     </div>
