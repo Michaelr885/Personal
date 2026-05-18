@@ -331,12 +331,20 @@ code {
   background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
 }
 
+/* Teamkarte als Ganzes: sonst „markiert“ der Browser Titel+Hinweis+Liste beim Ziehen */
+#view-dashboard .card-team.team-drop-zone,
+#view-dashboard .panel--unassigned.team-drop-zone {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .card-team.team-drop-zone {
   min-height: 140px;
 }
 
-.card-team li[draggable="true"],
-.dashboard-emp-chip[draggable="true"] {
+.card-team li[data-dashboard-employee],
+.dashboard-emp-chip[data-dashboard-employee] {
   user-select: none;
   -webkit-user-select: none;
 }
@@ -352,16 +360,16 @@ code {
   opacity: 0.88;
 }
 
-.card-team li[draggable="true"] {
+.card-team li[data-dashboard-employee] {
   cursor: grab;
   border: 1px solid transparent;
 }
 
-.card-team li[draggable="true"]:active {
+.card-team li[data-dashboard-employee]:active {
   cursor: grabbing;
 }
 
-.card-team li[draggable="true"]:hover {
+.card-team li[data-dashboard-employee]:hover {
   border-color: #e2e8f0;
   background: #f1f5f9;
 }
