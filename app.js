@@ -1817,10 +1817,10 @@ function preferDashboardTouchDrag() {
 }
 
 /**
- * HTML5-Drag (Maus) nur abschalten, wenn wir wirklich den Touch-/Stift-Zug nutzen.
- * Sonst: Touch-Pfad (draggable=false) + pointerdown ignoriert Maus → Ziehen mit Maus unmöglich (Hybrid-PC).
+ * Teamkarten-Reihenfolge: natives HTML5-Drag nur, wenn keine reine Grob-Touch-Erkennung
+ * (sonst bleibt draggable aus und der Pointer-Pfad übernimmt – derzeit nur Mitarbeitende).
  */
-function dashboardEmployeesUseNativeDrag() {
+function dashboardTeamCardsUseNativeDrag() {
   try {
     if (window.matchMedia("(pointer: fine)").matches) return true;
   } catch {
@@ -1829,14 +1829,17 @@ function dashboardEmployeesUseNativeDrag() {
   return !preferDashboardTouchDrag();
 }
 
-/** Nach jedem Neuaufbau: Touch-Geräte ohne natives HTML5-Ziehen auf den Chips. */
+/**
+ * Mitarbeitende: immer ohne natives Drag (Pointer-Zug für Maus, Touch und Stift).
+ * Teamkarten-Reihenfolge: optional natives Drag, wenn dashboardTeamCardsUseNativeDrag().
+ */
 function applyDashboardDragMode(root) {
-  const native = dashboardEmployeesUseNativeDrag();
+  const nativeTeam = dashboardTeamCardsUseNativeDrag();
   root.querySelectorAll("[data-dashboard-employee]").forEach((el) => {
-    if (el instanceof HTMLElement) el.draggable = native;
+    if (el instanceof HTMLElement) el.draggable = false;
   });
   root.querySelectorAll("[data-dashboard-team-card]").forEach((el) => {
-    if (el instanceof HTMLElement) el.draggable = native;
+    if (el instanceof HTMLElement) el.draggable = nativeTeam;
   });
 }
 
@@ -3932,8 +3935,8 @@ function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
 }
 
 /**
- * Pointer-Zug (Touch/Stift): setPointerCapture liefert zuverlässig pointermove,
- * auch wenn Touch-Events am Container hängen bleiben.
+ * Pointer-Zug für Mitarbeitende (Maus, Touch, Stift): zuverlässiger als HTML5-Drag
+ * bei gemischten Geräten; setPointerCapture + elementFromPoint beim Loslassen.
  */
 function setupDashboardPointerDrag(view) {
   if (view.dataset.dashboardPointer === "1") return;
@@ -3974,7 +3977,6 @@ function setupDashboardPointerDrag(view) {
   view.addEventListener(
     "pointerdown",
     (ev) => {
-      if (ev.pointerType === "mouse") return;
       if (ev.button !== 0) return;
       const row =
         ev.target instanceof Element ? ev.target.closest("[data-dashboard-employee]") : null;
