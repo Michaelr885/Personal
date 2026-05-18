@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Personal- & Projektplanung</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Hauptnavigation">
+        <div class="sidebar__brand">
+          <i class="fa-solid fa-people-group" aria-hidden="true"></i>
+          <span>Planung</span>
+        </div>
+        <nav class="sidebar__nav">
+          <button type="button" class="nav-btn is-active" data-view="dashboard">
+            <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
+            Dashboard
+          </button>
+          <button type="button" class="nav-btn" data-view="projects">
+            <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+            Projekte &amp; Gantt
+          </button>
+          <button type="button" class="nav-btn" data-view="personnel">
+            <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
+            Personalstammdaten
+          </button>
+        </nav>
+        <div class="sidebar__footer">
+          <small>Daten: <code>localStorage</code></small>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="main__header">
+          <h1 id="page-title">Dashboard</h1>
+          <p class="main__subtitle" id="page-subtitle">
+            Teams, Verfügbarkeit und Kennzahlen auf einen Blick.
+          </p>
+        </header>
+
+        <section id="view-dashboard" class="view view--active" aria-labelledby="page-title">
+          <div id="dashboard-content" class="stack"></div>
+        </section>
+
+        <section id="view-projects" class="view" hidden aria-labelledby="page-title">
+          <div class="panel gantt-panel">
+            <div class="panel__head">
+              <h2><i class="fa-solid fa-bars-staggered"></i> Projekt-Zeitleiste</h2>
+            </div>
+            <div id="gantt-container" class="gantt-wrap"></div>
+          </div>
+
+          <div class="split">
+            <div class="panel panel--left">
+              <div class="panel__head">
+                <h2><i class="fa-solid fa-user-check"></i> Verfügbare Mitarbeitende</h2>
+                <label class="field-inline">
+                  <span>Qualifikation</span>
+                  <select id="filter-qualification"></select>
+                </label>
+              </div>
+              <p class="hint" id="employees-hint"></p>
+              <ul id="employee-pool" class="employee-pool"></ul>
+            </div>
+            <div class="panel panel--right">
+              <div class="panel__head">
+                <h2><i class="fa-solid fa-folder-open"></i> Projekt &amp; Zuweisung</h2>
+                <label class="field-inline">
+                  <span>Projekt</span>
+                  <select id="project-select"></select>
+                </label>
+              </div>
+              <div id="project-detail" class="project-detail"></div>
+              <div class="assign-form">
+                <h3><i class="fa-solid fa-calendar-plus"></i> Zuweisung (Von–Bis)</h3>
+                <form id="assignment-form" class="form-grid">
+                  <label>
+                    Mitarbeitende/r
+                    <select id="assign-employee" required></select>
+                  </label>
+                  <label>
+                    Von
+                    <input type="date" id="assign-start" required />
+                  </label>
+                  <label>
+                    Bis
+                    <input type="date" id="assign-end" required />
+                  </label>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">
+                      <i class="fa-solid fa-floppy-disk"></i> Zuweisen
+                    </button>
+                  </div>
+                </form>
+                <p class="hint">
+                  Ziehen Sie eine Person aus der linken Liste auf dieses Panel, um die
+                  Auswahl zu übernehmen.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-personnel" class="view" hidden aria-labelledby="page-title">
+          <div class="panel">
+            <div class="panel__head panel__head--wrap">
+              <h2><i class="fa-solid fa-table"></i> Mitarbeitende</h2>
+              <div class="toolbar">
+                <label class="field-inline">
+                  <span>Suche</span>
+                  <input
+                    type="search"
+                    id="personnel-search"
+                    placeholder="Name, Personalnummer…"
+                  />
+                </label>
+                <label class="field-inline">
+                  <span>Status</span>
+                  <select id="personnel-filter-status">
+                    <option value="">Alle</option>
+                    <option>Verfügbar</option>
+                    <option>Krank</option>
+                    <option>Urlaub</option>
+                  </select>
+                </label>
+                <label class="field-inline">
+                  <span>Qualifikation</span>
+                  <select id="personnel-filter-qual"></select>
+                </label>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table" id="personnel-table">
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Qualifikation</th>
+                    <th>Teamleitung</th>
+                    <th>Status</th>
+                    <th>Zertifikat bis</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="personnel-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel__head">
+              <h2 id="employee-form-title">
+                <i class="fa-solid fa-user-plus"></i> Mitarbeitende/n anlegen
+              </h2>
+            </div>
+            <form id="employee-form" class="form-grid form-grid--wide">
+              <input type="hidden" id="emp-id" />
+              <label>
+                Personalnummer
+                <input type="text" id="emp-pnr" required />
+              </label>
+              <label>
+                Vorname
+                <input type="text" id="emp-vorname" required />
+              </label>
+              <label>
+                Nachname
+                <input type="text" id="emp-nachname" required />
+              </label>
+              <label>
+                Qualifikation
+                <select id="emp-qual" required></select>
+              </label>
+              <label class="span-2">
+                Zusatz-Tags (Komma-getrennt)
+                <input type="text" id="emp-tags" placeholder="z. B. Höhenarbeit, Kran" />
+              </label>
+              <label>
+                Teamleitung
+                <select id="emp-tl" required></select>
+              </label>
+              <label>
+                Status
+                <select id="emp-status" required>
+                  <option>Verfügbar</option>
+                  <option>Krank</option>
+                  <option>Urlaub</option>
+                </select>
+              </label>
+              <label>
+                Zertifikat gültig bis
+                <input type="date" id="emp-cert" required />
+              </label>
+              <div class="form-actions span-2">
+                <button type="submit" class="btn btn--primary">
+                  <i class="fa-solid fa-save"></i> Speichern
+                </button>
+                <button type="button" class="btn" id="emp-reset">
+                  <i class="fa-solid fa-rotate-left"></i> Formular leeren
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div
+      id="modal-backdrop"
+      class="modal-backdrop"
+      hidden
+      role="presentation"
+    ></div>
+    <div
+      id="modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      hidden
+    >
+      <div class="modal__card">
+        <h2 id="modal-title">Hinweis</h2>
+        <p id="modal-body"></p>
+        <div class="modal__actions">
+          <button type="button" class="btn" id="modal-cancel">Abbrechen</button>
+          <button type="button" class="btn btn--danger" id="modal-confirm">
+            Trotzdem zuweisen
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
