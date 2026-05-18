@@ -1895,12 +1895,11 @@ function renderDashboard() {
         })
         .join("");
       const abt = normalizeAbteilung(tl.Abteilung);
-      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}" title="Teamkarte auf eine andere Karte ziehen, um die Reihenfolge zu ändern">
+      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
         <div class="card-team__title">
           <strong>${escapeHtml(tl.Name)}</strong>
         </div>
         <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
-        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -1997,10 +1996,6 @@ function renderDashboard() {
     <div class="panel dashboard-teams-wrap">
       <div class="panel__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
-        <p class="hint">
-          Jede Karte steht für eine Teamleitung und deren Abteilung. Ziehen Sie eine Karte auf eine andere,
-          um die <strong>Anzeigereihenfolge</strong> im Dashboard zu ändern (nicht die Teamzuordnung der Mitarbeitenden).
-        </p>
       </div>
       <div class="grid-dashboard">${teamCards}</div>
     </div>
