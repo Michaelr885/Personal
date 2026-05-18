@@ -717,6 +717,10 @@ function shiftUrlaubMonth(delta) {
   }
 }
 
+function shiftUrlaubYear(delta) {
+  urlaubCalendarYM.y += delta;
+}
+
 /** @param {string|null|undefined} ab @param {string|null|undefined} bis @param {string} windowStart @param {string} windowEnd */
 function clipUrlaubRangeToWindow(ab, bis, windowStart, windowEnd) {
   if (ab == null || ab === "") return null;
@@ -909,14 +913,6 @@ function renderUrlaubPlan() {
     </div>`;
   });
 
-  const monthShortTitle = new Date(y, m, 1).toLocaleDateString("de-DE", { month: "short", year: "numeric" });
-  const monthSummaryRows = employees
-    .map((emp) => {
-      const n = countVacationDaysInWindow(emp, monthStart, monthEnd);
-      return `<tr><td>${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td><td class="urlaub-summary__num">${n}</td></tr>`;
-    })
-    .join("");
-
   const monthHeadCells = [];
   for (let m0 = 0; m0 < 12; m0++) {
     const mh = new Date(y, m0, 1).toLocaleDateString("de-DE", { month: "short" });
@@ -952,18 +948,18 @@ function renderUrlaubPlan() {
     }
     <div class="urlaub-plan__after">
       <div class="panel urlaub-summary-panel">
-        <h3 class="urlaub-summary__title"><i class="fa-solid fa-calculator"></i> Urlaubstage im Monat (${escapeHtml(monthShortTitle)})</h3>
-        <p class="hint">Kalendertage in allen erfassten Urlaubszeiträumen; überlappende Zeiten zählen nur einmal.</p>
-        <div class="table-wrap">
-          <table class="data-table urlaub-summary-table">
-            <thead><tr><th>Mitarbeitende/r</th><th class="urlaub-summary__num">Tage</th></tr></thead>
-            <tbody>${monthSummaryRows || '<tr><td colspan="2" class="hint">—</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="panel urlaub-summary-panel">
-        <h3 class="urlaub-summary__title"><i class="fa-solid fa-calendar"></i> Jahresübersicht ${escapeHtml(String(y))}</h3>
-        <p class="hint">Summe pro Kalendermonat für dasselbe Jahr wie oben; letzte Spalte = Summe über das Jahr.</p>
+        <h3 class="urlaub-summary__title urlaub-summary__title--year">
+          <span class="urlaub-year-nav" role="group" aria-label="Jahr wechseln">
+            <button type="button" class="btn btn--small urlaub-year-shift" data-delta="-1" title="Vorheriges Jahr" aria-label="Vorheriges Jahr">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <span class="urlaub-year-nav__label"><i class="fa-solid fa-calendar"></i> Jahresübersicht ${escapeHtml(String(y))}</span>
+            <button type="button" class="btn btn--small urlaub-year-shift" data-delta="1" title="Nächstes Jahr" aria-label="Nächstes Jahr">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </span>
+        </h3>
+        <p class="hint">Summe pro Kalendermonat für dasselbe Jahr wie im Monatsraster oben; letzte Spalte = Summe über das Jahr. Pfeile: Jahr der Tabelle wechseln.</p>
         <div class="table-wrap urlaub-year-table-wrap">
           <table class="data-table urlaub-summary-table urlaub-year-table">
             <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
@@ -976,6 +972,19 @@ function renderUrlaubPlan() {
 }
 
 function setupUrlaubView() {
+  const viewUrlaub = /** @type {HTMLElement | null} */ ($("#view-urlaub"));
+  if (viewUrlaub && viewUrlaub.dataset.urlaubYearNav !== "1") {
+    viewUrlaub.dataset.urlaubYearNav = "1";
+    viewUrlaub.addEventListener("click", (ev) => {
+      const t = ev.target instanceof Element ? ev.target.closest("button.urlaub-year-shift[data-delta]") : null;
+      if (!(t instanceof HTMLButtonElement)) return;
+      const d = Number(t.dataset.delta);
+      if (!Number.isFinite(d) || d === 0) return;
+      shiftUrlaubYear(d);
+      renderUrlaubPlan();
+    });
+  }
+
   const prev = /** @type {HTMLButtonElement | null} */ ($("#urlaub-month-prev"));
   const next = /** @type {HTMLButtonElement | null} */ ($("#urlaub-month-next"));
   if (!prev || prev.dataset.bound === "1") return;

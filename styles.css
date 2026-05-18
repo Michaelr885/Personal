@@ -1343,6 +1343,28 @@ textarea {
   font-size: 1rem;
 }
 
+.urlaub-summary__title--year {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.urlaub-year-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.urlaub-year-nav__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text);
+}
+
 .urlaub-summary-table .urlaub-summary__num {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1363,6 +1385,15 @@ textarea {
 
 .urlaub-year-table-wrap {
   overflow-x: auto;
+}
+
+.urlaub-year-table {
+  border: 1px solid var(--border);
+}
+
+.urlaub-year-table th,
+.urlaub-year-table td {
+  border: 1px solid var(--border);
 }
 
 .urlaub-year-th,
