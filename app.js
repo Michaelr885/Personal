@@ -21,6 +21,108 @@ const QUALIFICATIONS = [
 /** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[] } | null} */
 let state = null;
 
+const UNDO_HISTORY_LIMIT = 80;
+/** @type {string[]} */
+let undoStack = [];
+/** @type {string[]} */
+let redoStack = [];
+let historySuspended = false;
+
+function clearUndoHistory() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+
+function cloneStateJson() {
+  if (!state) return "";
+  return JSON.stringify(state);
+}
+
+function recordUndoSnapshot() {
+  if (!state || historySuspended) return;
+  undoStack.push(cloneStateJson());
+  if (undoStack.length > UNDO_HISTORY_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function refreshAllDataViews() {
+  if (!state) return;
+  renderDashboard();
+  renderPersonnelView();
+  if ($("#view-projects").classList.contains("view--active")) {
+    renderProjectsView();
+  } else {
+    renderGantt();
+  }
+}
+
+async function undoLastChange() {
+  if (!state || historySuspended || undoStack.length === 0) return;
+  const prevJson = undoStack.pop();
+  if (!prevJson) return;
+  redoStack.push(cloneStateJson());
+  historySuspended = true;
+  try {
+    state = /** @type {typeof state} */ (JSON.parse(prevJson));
+    await persist();
+    refreshAllDataViews();
+  } finally {
+    historySuspended = false;
+  }
+}
+
+async function redoLastChange() {
+  if (!state || historySuspended || redoStack.length === 0) return;
+  const nextJson = redoStack.pop();
+  if (!nextJson) return;
+  undoStack.push(cloneStateJson());
+  historySuspended = true;
+  try {
+    state = /** @type {typeof state} */ (JSON.parse(nextJson));
+    await persist();
+    refreshAllDataViews();
+  } finally {
+    historySuspended = false;
+  }
+}
+
+/** @param {Event} ev */
+function isTypingFieldUndoTarget(ev) {
+  const el = ev.target;
+  if (!(el instanceof Element)) return false;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA") return true;
+  if (el.getAttribute("contenteditable") === "true") return true;
+  if (tag === "INPUT") {
+    const t = (/** @type {HTMLInputElement} */ (el).type || "text").toLowerCase();
+    if (["text", "search", "email", "url", "tel", "password"].includes(t)) return true;
+  }
+  return false;
+}
+
+function setupHistoryKeyboard() {
+  document.addEventListener("keydown", (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || !state) return;
+    if (isTypingFieldUndoTarget(ev)) return;
+    const k = ev.key;
+    if (k === "z" || k === "Z") {
+      if (ev.shiftKey) {
+        if (redoStack.length === 0) return;
+        ev.preventDefault();
+        void redoLastChange();
+      } else {
+        if (undoStack.length === 0) return;
+        ev.preventDefault();
+        void undoLastChange();
+      }
+    } else if (k === "y" || k === "Y") {
+      if (redoStack.length === 0) return;
+      ev.preventDefault();
+      void redoLastChange();
+    }
+  });
+}
+
 function nextId(list, key = "ID") {
   if (!list.length) return 1;
   return Math.max(...list.map((item) => Number(item[key]) || 0)) + 1;
@@ -725,6 +827,7 @@ function renderProjectDetail() {
   $all("[data-del-assignment]", panel).forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = Number(/** @type {HTMLElement} */ (btn).dataset.delAssignment);
+      recordUndoSnapshot();
       state.assignments = state.assignments.filter((a) => Number(a.ID) !== id);
       await persist();
       renderProjectDetail();
@@ -791,6 +894,7 @@ function renderProjectsView() {
 
 async function pushAssignmentAndRefresh(employeeId, projectId, start, end) {
   if (!state) return;
+  recordUndoSnapshot();
   const newRow = {
     ID: nextId(state.assignments),
     Project_ID: Number(projectId),
@@ -944,6 +1048,7 @@ function renderTeamLeadersTable() {
         { confirmText: "Ja, löschen", confirmDanger: true }
       );
       if (!ok) return;
+      recordUndoSnapshot();
       for (const e of state.employees) {
         if (Number(e.Teamleiter_ID) === id) e.Teamleiter_ID = null;
       }
@@ -1005,6 +1110,7 @@ function renderPersonnelTable() {
         { confirmText: "Ja, löschen", confirmDanger: true }
       );
       if (!ok) return;
+      recordUndoSnapshot();
       state.employees = state.employees.filter((e) => Number(e.ID) !== id);
       state.assignments = state.assignments.filter((a) => Number(a.Employee_ID) !== id);
       await persist();
@@ -1132,6 +1238,7 @@ function setupPersonnelInteractions() {
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
     if (idx >= 0) {
+      recordUndoSnapshot();
       state.employees[idx] = { ...state.employees[idx], ...payload };
     }
     await persist();
@@ -1172,6 +1279,7 @@ function setupPersonnelInteractions() {
       Abwesenheit_geplant_ab: readOptionalISODateFromInput("#new-emp-plan-ab"),
       Abwesenheit_geplant_bis: readOptionalISODateFromInput("#new-emp-plan-bis"),
     };
+    recordUndoSnapshot();
     state.employees.push(newEmp);
     await persist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
@@ -1189,6 +1297,7 @@ function setupPersonnelInteractions() {
     const name = /** @type {HTMLInputElement} */ ($("#new-tl-name")).value.trim();
     if (!name) return;
     const colorIn = /** @type {HTMLInputElement} */ ($("#new-tl-color")).value;
+    recordUndoSnapshot();
     state.team_leaders.push({
       ID: nextId(state.team_leaders),
       Name: name,
@@ -1232,6 +1341,7 @@ function setupFileLinking() {
     try {
       const data = await linkLocalDataFile();
       state = data;
+      clearUndoHistory();
       meta.textContent = `Aktiv: ${getLinkedFileName()} · Daten geladen`;
       $("#gate-screen").hidden = true;
       $("#app-workspace").hidden = false;
@@ -1331,11 +1441,13 @@ function setupDashboardDnD() {
     const emp = getEmployee(empId);
     if (!emp) return;
     if (zone.hasAttribute("data-drop-unassigned")) {
+      recordUndoSnapshot();
       emp.Teamleiter_ID = null;
     } else {
       const tlId = zone.getAttribute("data-drop-teamleader");
       if (!tlId || !getTeamLeader(tlId)) return;
       if (Number(emp.Teamleiter_ID) === Number(tlId)) return;
+      recordUndoSnapshot();
       emp.Teamleiter_ID = Number(tlId);
     }
     await persist();
@@ -1349,6 +1461,7 @@ function setupDashboardDnD() {
 function boot() {
   closeAllModalsAndBackdrops();
   state = null;
+  clearUndoHistory();
   setupNavigation();
   setupDashboardDnD();
   setupProjectsInteractions();
@@ -1356,6 +1469,7 @@ function boot() {
   setupDndAssignModal();
   setupProjectDropDelegation();
   setupFileLinking();
+  setupHistoryKeyboard();
   setNavEnabled(false);
 }
 

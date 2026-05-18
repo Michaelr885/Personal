@@ -170,6 +170,17 @@ code {
   color: #94a3b8;
   font-size: 0.72rem;
   line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar__footer-hint kbd {
+  font-size: 0.68rem;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.35);
 }
 
 .main {
