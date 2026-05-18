@@ -378,10 +378,48 @@ code {
   font-size: 0.82rem;
 }
 
-#project-form-quals {
-  font-family: ui-monospace, monospace;
-  min-height: 4.5rem;
-  resize: vertical;
+.project-quals-field__label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.15rem;
+}
+
+.project-quals-field__hint {
+  margin: 0 0 0.4rem;
+}
+
+.project-quals-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+
+.project-qual-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(4.5rem, 5.5rem) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.project-qual-row__qual {
+  min-width: 0;
+  width: 100%;
+}
+
+.project-qual-row__count {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .project-qual-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card-team li[data-dashboard-employee],

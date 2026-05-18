@@ -2211,24 +2211,6 @@ function setGanttViewMode(mode) {
   syncGanttViewModeButtons();
 }
 
-/** @param {string} raw */
-function parseProjectQualificationsJson(raw) {
-  const s = String(raw ?? "").trim();
-  if (s === "") return {};
-  const o = JSON.parse(s);
-  if (o == null || typeof o !== "object" || Array.isArray(o)) {
-    throw new Error("Qualifikationen: JSON muss ein Objekt sein.");
-  }
-  /** @type {Record<string, number>} */
-  const out = {};
-  for (const [k, v] of Object.entries(o)) {
-    const n = Number(v);
-    if (!Number.isFinite(n) || n < 0) continue;
-    const key = String(k).trim();
-    if (key) out[key] = Math.floor(n);
-  }
-  return out;
-}
 
 function renderProjectsTable() {
   if (!state) return;
@@ -2268,9 +2250,7 @@ function openProjectModal(proj) {
   /** @type {HTMLInputElement} */ ($("#project-form-end")).value = proj
     ? proj.Enddatum
     : addCalendarDaysToISO(todayISO(), 30) || todayISO();
-  /** @type {HTMLTextAreaElement} */ ($("#project-form-quals")).value = proj
-    ? JSON.stringify(proj.Benötigte_Qualifikationen ?? {}, null, 2)
-    : "{}";
+  renderProjectQualificationsEditor(proj ? { ...(proj.Benötigte_Qualifikationen ?? {}) } : {});
   $("#project-modal-title").textContent = proj ? "Projekt bearbeiten" : "Neues Projekt";
   /** @type {HTMLInputElement} */ ($("#project-form-name")).focus();
 }
@@ -2283,6 +2263,85 @@ function uniqueQualifications() {
     Object.keys(p.Benötigte_Qualifikationen || {}).forEach((k) => set.add(k));
   });
   return [...set].sort();
+}
+
+/** Eine Zeile im Qualifikations-Editor anhängen. */
+function appendProjectQualRow(qualValue = "", count = 1) {
+  const host = /** @type {HTMLElement | null} */ ($("#project-form-quals-host"));
+  if (!state || !host) return;
+  const quals = uniqueQualifications();
+  const n = Math.max(1, Math.min(999, Math.floor(Number(count)) || 1));
+  const opts = ['<option value="">Qualifikation wählen…</option>'].concat(
+    quals.map(
+      (q) =>
+        `<option value="${escapeHtml(q)}"${q === qualValue ? " selected" : ""}>${escapeHtml(q)}</option>`
+    )
+  );
+  const row = document.createElement("div");
+  row.className = "project-qual-row";
+  row.innerHTML = `
+    <select class="project-qual-row__qual" aria-label="Qualifikation">${opts.join("")}</select>
+    <input type="number" class="project-qual-row__count" min="1" max="999" step="1" value="${n}" aria-label="Anzahl" />
+    <button type="button" class="btn btn--ghost btn--icon btn--small" data-pq-remove title="Zeile entfernen" aria-label="Zeile entfernen"><i class="fa-solid fa-xmark"></i></button>
+  `;
+  const sel = row.querySelector("select");
+  if (qualValue && sel instanceof HTMLSelectElement && ![...sel.options].some((o) => o.value === qualValue)) {
+    const o = document.createElement("option");
+    o.value = qualValue;
+    o.textContent = qualValue;
+    o.selected = true;
+    sel.appendChild(o);
+  }
+  host.appendChild(row);
+}
+
+function ensureProjectQualEditorHasRow() {
+  const host = /** @type {HTMLElement | null} */ ($("#project-form-quals-host"));
+  if (!host) return;
+  if (!host.querySelector(".project-qual-row")) appendProjectQualRow("", 1);
+}
+
+/** @param {Record<string, number>} data */
+function renderProjectQualificationsEditor(data) {
+  const host = /** @type {HTMLElement | null} */ ($("#project-form-quals-host"));
+  if (!host) return;
+  const entries = Object.entries(data).filter(([k, v]) => {
+    const key = String(k).trim();
+    const num = Number(v);
+    return key && Number.isFinite(num) && num > 0;
+  });
+  host.innerHTML = "";
+  if (entries.length === 0) {
+    appendProjectQualRow("", 1);
+  } else {
+    for (const [k, v] of entries) {
+      appendProjectQualRow(k, v);
+    }
+  }
+}
+
+/** @returns {Record<string, number>} */
+function collectProjectQualificationsFromEditor() {
+  const host = /** @type {HTMLElement | null} */ ($("#project-form-quals-host"));
+  if (!host) return {};
+  /** @type {Record<string, number>} */
+  const out = {};
+  const seen = new Set();
+  for (const row of host.querySelectorAll(".project-qual-row")) {
+    const sel = row.querySelector("select.project-qual-row__qual");
+    const numEl = row.querySelector("input.project-qual-row__count");
+    if (!(sel instanceof HTMLSelectElement) || !(numEl instanceof HTMLInputElement)) continue;
+    const q = sel.value.trim();
+    if (!q) continue;
+    const n = Math.floor(Number(numEl.value));
+    if (!Number.isFinite(n) || n < 1) continue;
+    if (seen.has(q)) {
+      throw new Error(`Qualifikation „${q}“ ist mehrfach eingetragen.`);
+    }
+    seen.add(q);
+    out[q] = Math.min(999, n);
+  }
+  return out;
 }
 
 function availableEmployeesForPool(filterQual) {
@@ -2599,6 +2658,26 @@ function setupProjectsInteractions() {
   $("#project-modal-backdrop").addEventListener("click", closeProjectModal);
   $("#project-form-cancel").addEventListener("click", closeProjectModal);
 
+  const projectFormEl = /** @type {HTMLFormElement | null} */ ($("#project-form"));
+  if (projectFormEl && projectFormEl.dataset.qualUi !== "1") {
+    projectFormEl.dataset.qualUi = "1";
+    projectFormEl.addEventListener("click", (ev) => {
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t?.closest("#project-form-quals-add")) {
+        ev.preventDefault();
+        appendProjectQualRow("", 1);
+        return;
+      }
+      if (t?.closest("[data-pq-remove]")) {
+        ev.preventDefault();
+        const btn = t.closest("[data-pq-remove]");
+        const row = btn?.closest(".project-qual-row");
+        row?.remove();
+        ensureProjectQualEditorHasRow();
+      }
+    });
+  }
+
   /** @type {HTMLFormElement} */ ($("#project-form")).addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!state) return;
@@ -2606,7 +2685,6 @@ function setupProjectsInteractions() {
     const name = /** @type {HTMLInputElement} */ ($("#project-form-name")).value.trim();
     const start = /** @type {HTMLInputElement} */ ($("#project-form-start")).value;
     const end = /** @type {HTMLInputElement} */ ($("#project-form-end")).value;
-    const qualsRaw = /** @type {HTMLTextAreaElement} */ ($("#project-form-quals")).value;
     if (!name || !start || !end) return;
     if (start > end) {
       await openModal(
@@ -2618,7 +2696,7 @@ function setupProjectsInteractions() {
     }
     let Benötigte_Qualifikationen;
     try {
-      Benötigte_Qualifikationen = parseProjectQualificationsJson(qualsRaw);
+      Benötigte_Qualifikationen = collectProjectQualificationsFromEditor();
     } catch (err) {
       const detail =
         err && typeof err === "object" && "message" in err
@@ -2626,7 +2704,7 @@ function setupProjectsInteractions() {
           : String(err);
       await openModal(
         "Qualifikationen",
-        `<div>Bitte gültiges JSON eingeben (Objekt mit Zählungen). ${escapeHtml(detail)}</div>`,
+        `<div>${escapeHtml(detail)}</div>`,
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
