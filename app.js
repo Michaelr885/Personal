@@ -274,6 +274,12 @@ function addCalendarDaysToISO(isoStr, deltaDays) {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** Gantt liefert `Date` (lokal); für Projekt-Stammdaten yyyy-mm-dd. */
+function dateFromGanttToProjectISO(/** @type {unknown} */ d) {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 /** Erster Arbeitstag nach dem letzten Abwesenheitstag (inkl. „bis“). */
 function firstWorkdayAfterAbsenceEnd(/** @type {Employee} */ emp) {
   if (emp.Status === "Krank") {
@@ -1957,6 +1963,39 @@ function destroyGantt() {
   ganttInstance = null;
 }
 
+/** Nach Drag/Resize in der frappe-gantt-Zeitleiste: Projektdaten und UI synchronisieren. */
+async function applyProjectDatesFromGantt(projectId, startISO, endISO) {
+  if (!state) return;
+  if (!startISO || !endISO || startISO > endISO) return;
+  const idx = state.projects.findIndex((p) => Number(p.ID) === projectId);
+  if (idx < 0) return;
+  recordUndoSnapshot();
+  const prev = state.projects[idx];
+  state.projects[idx] = { ...prev, Startdatum: startISO, Enddatum: endISO };
+  try {
+    await persist();
+  } catch (err) {
+    console.error(err);
+    return;
+  }
+  renderProjectsTable();
+  renderProjectDropZones();
+  const sel = /** @type {HTMLSelectElement | null} */ ($("#project-select"));
+  if (sel && String(projectId) === sel.value) {
+    const as = /** @type {HTMLInputElement | null} */ ($("#assign-start"));
+    const ae = /** @type {HTMLInputElement | null} */ ($("#assign-end"));
+    if (as) as.value = startISO;
+    if (ae) ae.value = endISO;
+    renderProjectDetail();
+  }
+  renderDashboard();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      renderGantt();
+    });
+  });
+}
+
 function renderProjectDropZones() {
   if (!state) return;
   const host = /** @type {HTMLElement} */ ($("#project-drop-zones"));
@@ -2112,6 +2151,13 @@ function renderGanttCore() {
       // frappe-gantt 0.6.1: keine Locale "de" (month_names) → sonst TypeError in date_utils
       language: "en",
       date_format: "YYYY-MM-DD",
+      on_date_change(task, start, end) {
+        const startISO = dateFromGanttToProjectISO(start);
+        const endISO = dateFromGanttToProjectISO(end ?? start);
+        const pid = Number(task.id);
+        if (!Number.isFinite(pid)) return;
+        void applyProjectDatesFromGantt(pid, startISO, endISO);
+      },
     });
   } catch (err) {
     console.error(err);
