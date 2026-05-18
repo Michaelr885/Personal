@@ -126,7 +126,8 @@
               <p class="hint">
                 Projekte steuern die Gantt-Zeitleiste und die Ablagekarten. Benötigte Qualifikationen mit
                 geplanter Kopfzahl tragen Sie im Bearbeiten-Dialog ein (eine Zeile pro Qualifikation, „+“ für
-                weitere Zeilen).
+                weitere Zeilen). Ein Klick auf eine Tabellenzeile (nicht auf die Aktionen) wählt das Projekt
+                für die Zuweisung und filtert die Mitarbeitenden-Liste.
               </p>
               <div class="table-wrap">
                 <table class="data-table" id="projects-table" aria-label="Projekte">
@@ -150,7 +151,8 @@
               </div>
               <p class="hint">
                 Ziehen Sie eine verfügbare Person aus der Liste unten auf eine Projektkarte. Anschließend
-                wählen Sie den Zuweisungszeitraum im Dialog.
+                wählen Sie den Zuweisungszeitraum im Dialog. Ein Klick auf eine Karte wählt das Projekt in
+                der rechten Spalte (ohne Zuweisung).
               </p>
               <div id="project-drop-zones" class="project-drop-zones" aria-label="Projekte als Ablagezonen"></div>
             </div>
@@ -164,6 +166,13 @@
                     <select id="filter-qualification"></select>
                   </label>
                 </div>
+                <label class="pool-filter-opt">
+                  <input type="checkbox" id="pool-include-assigned" />
+                  <span
+                    >Auch Mitarbeitende anzeigen, die bereits einem Projekt zugewiesen sind (sonst nur ohne
+                    Projekt-Zuweisung, sobald ein Projekt gewählt ist)</span
+                  >
+                </label>
                 <p class="hint" id="employees-hint"></p>
                 <div id="employee-pool" class="employee-pool employee-pool--cards"></div>
               </div>

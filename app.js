@@ -2434,7 +2434,7 @@ function renderProjectsTable() {
     .slice()
     .sort((a, b) => Number(a.ID) - Number(b.ID))
     .map(
-      (p) => `<tr>
+      (p) => `<tr data-select-project="${p.ID}" class="projects-table__row-selectable" title="Projekt auswählen">
         <td>${p.ID}</td>
         <td>${escapeHtml(p.Name)}</td>
         <td>${escapeHtml(p.Startdatum)}</td>
@@ -2559,11 +2559,29 @@ function collectProjectQualificationsFromEditor() {
   return out;
 }
 
+function employeeHasAnyProjectAssignment(employeeId) {
+  if (!state) return false;
+  const id = Number(employeeId);
+  return state.assignments.some((a) => Number(a.Employee_ID) === id);
+}
+
+/** Wenn ein Projekt gewählt ist und die Checkbox „auch zugewiesene“ nicht aktiv: nur Personen ohne jede Projekt-Zuweisung. */
+function employeePoolRestrictsToUnassigned() {
+  if (!state || state.projects.length === 0) return false;
+  const projSel = /** @type {HTMLSelectElement | null} */ (document.getElementById("project-select"));
+  if (!projSel?.value) return false;
+  const incl = /** @type {HTMLInputElement | null} */ (document.getElementById("pool-include-assigned"));
+  if (incl?.checked) return false;
+  return true;
+}
+
 function availableEmployeesForPool(filterQual) {
   if (!state) return [];
+  const restrict = employeePoolRestrictsToUnassigned();
   return state.employees.filter((e) => {
     if (e.Status !== "Verfügbar") return false;
     if (filterQual && e.Qualifikation !== filterQual) return false;
+    if (restrict && employeeHasAnyProjectAssignment(e.ID)) return false;
     return true;
   });
 }
@@ -2573,7 +2591,11 @@ function renderEmployeePool() {
   const qual = /** @type {HTMLSelectElement} */ ($("#filter-qualification")).value;
   const list = /** @type {HTMLElement} */ ($("#employee-pool"));
   const emps = availableEmployeesForPool(qual || null);
-  $("#employees-hint").textContent = `${emps.length} Person(en) im Pool (nur Status „Verfügbar“).`;
+  const restrict = employeePoolRestrictsToUnassigned();
+  const qualNote = qual ? ` · Qualifikation „${qual}“` : "";
+  $("#employees-hint").textContent = restrict
+    ? `${emps.length} Person(en): verfügbar und in keinem Projekt zugewiesen${qualNote}.`
+    : `${emps.length} Person(en) im Pool (nur Status „Verfügbar“)${qualNote}.`;
   list.innerHTML = emps
     .map(
       (e) => {
@@ -2592,6 +2614,8 @@ function renderEmployeePool() {
       }
     )
     .join("");
+  const poolCb = /** @type {HTMLInputElement | null} */ ($("#pool-include-assigned"));
+  if (poolCb) poolCb.disabled = state.projects.length === 0;
 }
 
 function renderProjectAssignments(projectId) {
@@ -2773,9 +2797,15 @@ function setupProjectsInteractions() {
 
   qualSelect.addEventListener("change", () => renderEmployeePool());
 
+  /** @type {HTMLInputElement | null} */ (document.getElementById("pool-include-assigned"))?.addEventListener(
+    "change",
+    () => renderEmployeePool()
+  );
+
   projSelect.addEventListener("change", () => {
     renderProjectDetail();
     fillAssignmentEmployeeSelect(projSelect.value);
+    renderEmployeePool();
     const proj = getProject(projSelect.value);
     if (proj) {
       /** @type {HTMLInputElement} */ ($("#assign-start")).value = proj.Startdatum;
@@ -2835,6 +2865,28 @@ function setupProjectsInteractions() {
     if (modeEl instanceof HTMLElement && modeEl.dataset.ganttMode) {
       const m = modeEl.dataset.ganttMode;
       if (m === "Day" || m === "Week" || m === "Month") setGanttViewMode(m);
+      return;
+    }
+
+    const projRow = ev.target instanceof Element ? ev.target.closest("#projects-tbody tr[data-select-project]") : null;
+    if (projRow instanceof HTMLElement && projRow.dataset.selectProject) {
+      if (!(ev.target instanceof Element && ev.target.closest("button, .actions-cell"))) {
+        const sid = projRow.dataset.selectProject;
+        if (state?.projects.some((p) => String(p.ID) === sid)) {
+          projSelect.value = sid;
+          projSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return;
+      }
+    }
+
+    const dropPick = ev.target instanceof Element ? ev.target.closest(".project-drop-card[data-drop-project]") : null;
+    if (dropPick instanceof HTMLElement && dropPick.dataset.dropProject) {
+      const sid = dropPick.dataset.dropProject;
+      if (state?.projects.some((p) => String(p.ID) === sid)) {
+        projSelect.value = sid;
+        projSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       return;
     }
 

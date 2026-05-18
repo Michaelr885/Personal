@@ -805,7 +805,7 @@ code {
   border-radius: 10px;
   border: 2px dashed var(--border);
   background: #f8fafc;
-  cursor: default;
+  cursor: pointer;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
@@ -1039,6 +1039,22 @@ textarea {
   gap: 0.45rem;
 }
 
+.pool-filter-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.65rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+}
+
+.pool-filter-opt input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
 .field-inline span {
   white-space: nowrap;
 }
@@ -1125,6 +1141,10 @@ textarea {
 
 .data-table tbody tr:hover {
   background: #f8fafc;
+}
+
+#projects-tbody tr.projects-table__row-selectable {
+  cursor: pointer;
 }
 
 .tl-color-dot {
