@@ -161,6 +161,46 @@
           <section id="view-personnel" class="view" hidden aria-labelledby="page-title">
             <div class="panel">
               <div class="panel__head panel__head--wrap">
+                <h2><i class="fa-solid fa-people-roof"></i> Teamleitende</h2>
+              </div>
+              <p class="hint">
+                Teamleitende steuern die farbigen Teamkarten im Dashboard. Sie können jederzeit
+                angelegt oder entfernt werden. Die Zuordnung eines Mitarbeitenden zu einer
+                Teamleitung ist <strong>optional</strong> – ohne Zuordnung erscheint die Person dort
+                unter „Ohne Teamleitung“.
+              </p>
+              <div class="table-wrap">
+                <table class="data-table" id="teamleaders-table" aria-label="Teamleitende">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Farbe</th>
+                      <th>Mitarbeitende</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="teamleaders-tbody"></tbody>
+                </table>
+              </div>
+              <form id="new-teamleader-form" class="form-grid form-grid--wide assign-form">
+                <label class="span-2">
+                  Name
+                  <input type="text" id="new-tl-name" required maxlength="120" autocomplete="organization" />
+                </label>
+                <label>
+                  Team-Farbe (Dashboard)
+                  <input type="color" id="new-tl-color" value="#64748b" />
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit" class="btn btn--primary">
+                    <i class="fa-solid fa-user-tie"></i> Teamleiter/in anlegen
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head panel__head--wrap">
                 <h2><i class="fa-solid fa-table"></i> Mitarbeitende</h2>
                 <div class="toolbar">
                   <label class="field-inline">
@@ -226,8 +266,8 @@
                   <select id="new-emp-qual" required></select>
                 </label>
                 <label>
-                  Teamleiter
-                  <select id="new-emp-tl" required></select>
+                  Teamleitung (optional)
+                  <select id="new-emp-tl"></select>
                 </label>
                 <label>
                   Status
@@ -278,8 +318,8 @@
                   <input type="text" id="emp-tags" placeholder="z. B. Höhenarbeit, Kran" />
                 </label>
                 <label>
-                  Teamleitung
-                  <select id="emp-tl" required></select>
+                  Teamleitung (optional)
+                  <select id="emp-tl"></select>
                 </label>
                 <label>
                   Status

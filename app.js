@@ -5,7 +5,7 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number, Status:string, Zertifikat_Gültig_Bis:string }} Employee */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Zertifikat_Gültig_Bis:string }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -139,6 +139,13 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** @param {unknown} c */
+function sanitizeTeamColor(c) {
+  const s = typeof c === "string" ? c.trim() : "";
+  if (/^#[0-9A-Fa-f]{6}$/.test(s)) return s;
+  return "#64748b";
 }
 
 /**
@@ -298,7 +305,7 @@ function renderDashboard() {
   const unassigned = employeesWithoutTeamLeader();
   const unassignedChips =
     unassigned.length === 0
-      ? '<p class="hint">Alle Mitarbeitenden sind einer Teamleitung zugeordnet.</p>'
+      ? '<p class="hint">Alle Mitarbeitenden haben eine gültige Teamleitung oder sind ohne Teamleitung erfasst.</p>'
       : `<div class="dashboard-chip-row" aria-label="Ohne Teamleitung">${unassigned
           .map(
             (e) => `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
@@ -384,8 +391,9 @@ function renderDashboard() {
         <span class="badge badge--muted">${unassigned.length} Person(en)</span>
       </div>
       <p class="hint">
-        Diese Mitarbeitenden haben keine gültige Teamleiter-Zuordnung. Ziehen Sie sie auf eine
-        Teamkarte unten – oder weisen Sie die Teamleitung in der Personalverwaltung zu.
+        Teamleitung ist freiwillig: hier erscheinen Personen ohne Teamleitung oder mit ungültiger
+        Teamleiter-Referenz. Ziehen Sie sie auf eine Teamkarte – oder weisen Sie die Teamleitung in
+        der Personalverwaltung zu.
       </p>
       ${unassignedChips}
     </div>
@@ -820,6 +828,61 @@ function statusCellClass(status) {
   return "status-cell";
 }
 
+function renderTeamLeadersTable() {
+  if (!state) return;
+  const tbody = /** @type {HTMLElement} */ ($("#teamleaders-tbody"));
+  const rows = state.team_leaders
+    .map((tl) => {
+      const count = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID)).length;
+      const col = sanitizeTeamColor(tl.Team_Farbe);
+      return `<tr>
+        <td>${escapeHtml(tl.Name)}</td>
+        <td>
+          <span class="tl-color-dot" style="--tl-dot:${col}" title="${escapeHtml(col)}"></span>
+          <code>${escapeHtml(col)}</code>
+        </td>
+        <td>${count}</td>
+        <td class="actions-cell">
+          <button type="button" class="btn btn--icon btn--delete-icon" data-delete-tl="${tl.ID}" title="Teamleiter/in löschen" aria-label="Teamleiter/in löschen"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  tbody.innerHTML =
+    rows ||
+    '<tr><td colspan="4" class="hint">Noch keine Teamleitenden. Legen Sie unten eine Person an.</td></tr>';
+
+  tbody.querySelectorAll("[data-delete-tl]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(/** @type {HTMLElement} */ (btn).dataset.deleteTl);
+      if (!state || !Number.isFinite(id)) return;
+      const tl = getTeamLeader(id);
+      if (!tl) return;
+      const count = state.employees.filter((e) => Number(e.Teamleiter_ID) === id).length;
+      const ok = await openModal(
+        "Teamleiter/in löschen",
+        `<div>${
+          count > 0
+            ? `${count} Mitarbeitende werden auf „Keine Teamleitung“ gesetzt. `
+            : ""
+        }Der Eintrag wird dauerhaft entfernt.</div>`,
+        { confirmText: "Ja, löschen", confirmDanger: true }
+      );
+      if (!ok) return;
+      for (const e of state.employees) {
+        if (Number(e.Teamleiter_ID) === id) e.Teamleiter_ID = null;
+      }
+      state.team_leaders = state.team_leaders.filter((t) => Number(t.ID) !== id);
+      await persist();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+    });
+  });
+}
+
 function renderPersonnelTable() {
   if (!state) return;
   const tbody = /** @type {HTMLElement} */ ($("#personnel-tbody"));
@@ -842,7 +905,7 @@ function renderPersonnelTable() {
         <td>${e.Personalnummer}</td>
         <td>${e.Vorname} ${e.Nachname}</td>
         <td>${e.Qualifikation}</td>
-        <td>${tl ? tl.Name : "—"}</td>
+        <td>${tl ? escapeHtml(tl.Name) : "Keine"}</td>
         <td class="${sc}">${e.Status}</td>
         <td>${e.Zertifikat_Gültig_Bis}</td>
         <td class="actions-cell">
@@ -853,7 +916,7 @@ function renderPersonnelTable() {
     })
     .join("");
   tbody.innerHTML =
-    rows || '<tr><td colspan="8" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+    rows || '<tr><td colspan="7" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
 
   tbody.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => loadEmployeeIntoForm(Number(/** @type {HTMLElement} */ (btn).dataset.edit)));
@@ -913,9 +976,11 @@ function fillNewEmployeeSelects() {
     .map((q) => `<option value="${q}">${q}</option>`)
     .join("");
   if (!state) return;
-  /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML = state.team_leaders
-    .map((t) => `<option value="${t.ID}">${t.Name}</option>`)
-    .join("");
+  /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML =
+    '<option value="">Keine Teamleitung</option>' +
+    state.team_leaders
+      .map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`)
+      .join("");
 }
 
 function fillQualificationSelects() {
@@ -932,12 +997,13 @@ function fillTeamLeaderSelect() {
   const sel = /** @type {HTMLSelectElement} */ ($("#emp-tl"));
   sel.innerHTML =
     '<option value="">Keine Teamleitung</option>' +
-    state.team_leaders.map((t) => `<option value="${t.ID}">${t.Name}</option>`).join("");
+    state.team_leaders.map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`).join("");
 }
 
 function renderPersonnelView() {
   fillQualificationSelects();
   fillTeamLeaderSelect();
+  renderTeamLeadersTable();
   renderPersonnelTable();
 }
 
@@ -997,7 +1063,10 @@ function setupPersonnelInteractions() {
       Vorname: /** @type {HTMLInputElement} */ ($("#new-emp-vorname")).value.trim(),
       Nachname: /** @type {HTMLInputElement} */ ($("#new-emp-nachname")).value.trim(),
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).value,
-      Teamleiter_ID: Number(/** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value),
+      Teamleiter_ID: (() => {
+        const raw = /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value;
+        return raw === "" ? null : Number(raw);
+      })(),
       Status: /** @type {HTMLSelectElement} */ ($("#new-emp-status")).value,
       Zusatz_Tags: [],
       Zertifikat_Gültig_Bis: addDaysISO(todayISO(), 365),
@@ -1006,6 +1075,27 @@ function setupPersonnelInteractions() {
     await persist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
     fillNewEmployeeSelects();
+    renderPersonnelView();
+    renderDashboard();
+    if ($("#view-projects").classList.contains("view--active")) {
+      renderProjectsView();
+    }
+  });
+
+  $("#new-teamleader-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const name = /** @type {HTMLInputElement} */ ($("#new-tl-name")).value.trim();
+    if (!name) return;
+    const colorIn = /** @type {HTMLInputElement} */ ($("#new-tl-color")).value;
+    state.team_leaders.push({
+      ID: nextId(state.team_leaders),
+      Name: name,
+      Team_Farbe: sanitizeTeamColor(colorIn),
+    });
+    await persist();
+    /** @type {HTMLFormElement} */ ($("#new-teamleader-form")).reset();
+    /** @type {HTMLInputElement} */ ($("#new-tl-color")).value = "#64748b";
     renderPersonnelView();
     renderDashboard();
     if ($("#view-projects").classList.contains("view--active")) {
