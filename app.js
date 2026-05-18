@@ -306,6 +306,57 @@ function readOptionalISODateFromInput(id) {
   return v === "" ? null : v;
 }
 
+function addDaysFromTodayISO(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return todayISO();
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** @param {HTMLSelectElement | null} sel */
+function ensureSelectHasValue(sel, value, labelText) {
+  if (!sel || value == null || value === "") return;
+  const v = String(value);
+  if ([...sel.options].some((o) => o.value === v)) {
+    sel.value = v;
+    return;
+  }
+  const opt = document.createElement("option");
+  opt.value = v;
+  opt.textContent = labelText != null ? String(labelText) : v;
+  sel.appendChild(opt);
+  sel.value = v;
+}
+
+function absenceHintText(status) {
+  if (status === "Verfügbar") {
+    return "Geplanter freier Zeitraum: nur bei „Verfügbar“. Ab 5 Tage vor „von“ zeigt das Dashboard einen Hinweis. Für laufenden Urlaub/Krankheit Status umstellen und „Zurück an Arbeit“ setzen.";
+  }
+  if (status === "Krank" || status === "Urlaub") {
+    return "„Zurück an Arbeit“ festlegen (oder +1 / +2 Wochen) – im Dashboard erscheint die verbleibende Zeit bis dahin.";
+  }
+  return "";
+}
+
+function syncEditAbsenceHint() {
+  const el = /** @type {HTMLSelectElement | null} */ ($("#emp-status"));
+  const hint = /** @type {HTMLElement | null} */ ($("#emp-absence-hint"));
+  if (!el || !hint) return;
+  hint.textContent = absenceHintText(el.value);
+}
+
+function syncNewAbsenceHint() {
+  const el = /** @type {HTMLSelectElement | null} */ ($("#new-emp-status"));
+  const hint = /** @type {HTMLElement | null} */ ($("#new-emp-absence-hint"));
+  if (!el || !hint) return;
+  hint.textContent = absenceHintText(el.value);
+}
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -1118,59 +1169,122 @@ function renderPersonnelTable() {
         <td class="${sc}">${e.Status}</td>
         <td class="hint">${escapeHtml(absenceSummaryPlain(e))}</td>
         <td class="actions-cell">
-          <button type="button" class="btn btn--icon btn--ghost" data-edit="${e.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
-          <button type="button" class="btn btn--icon btn--delete-icon" data-delete="${e.ID}" title="Löschen" aria-label="Löschen"><i class="fa-solid fa-trash-can"></i></button>
+          <button type="button" class="btn btn--icon btn--ghost" data-action="edit-employee" data-emp-id="${e.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="btn btn--icon btn--delete-icon" data-action="delete-employee" data-emp-id="${e.ID}" title="Löschen" aria-label="Löschen"><i class="fa-solid fa-trash-can"></i></button>
         </td>
       </tr>`;
     })
     .join("");
   tbody.innerHTML =
     rows || '<tr><td colspan="7" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+}
 
-  tbody.querySelectorAll("[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => loadEmployeeIntoForm(Number(/** @type {HTMLElement} */ (btn).dataset.edit)));
+async function deleteEmployeeById(id) {
+  if (!state || !Number.isFinite(id)) return;
+  const ok = await openModal(
+    "Mitarbeitende/n löschen",
+    "<div>Zugehörige Zuweisungen werden ebenfalls entfernt. Fortfahren?</div>",
+    { confirmText: "Ja, löschen", confirmDanger: true }
+  );
+  if (!ok) return;
+  recordUndoSnapshot();
+  state.employees = state.employees.filter((e) => Number(e.ID) !== id);
+  state.assignments = state.assignments.filter((a) => Number(a.Employee_ID) !== id);
+  await persist();
+  renderPersonnelView();
+  renderDashboard();
+  if ($("#view-projects").classList.contains("view--active")) {
+    renderProjectsView();
+  }
+}
+
+function setupPersonnelTableActions() {
+  const tbody = /** @type {HTMLElement | null} */ ($("#personnel-tbody"));
+  if (!tbody || tbody.dataset.personnelActions === "1") return;
+  tbody.dataset.personnelActions = "1";
+  tbody.addEventListener("click", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const btn = el?.closest("button[data-action]");
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const action = btn.getAttribute("data-action");
+    const empId = Number(btn.getAttribute("data-emp-id"));
+    if (!Number.isFinite(empId)) return;
+    if (action === "edit-employee") {
+      loadEmployeeIntoForm(empId);
+      return;
+    }
+    if (action === "delete-employee") {
+      void deleteEmployeeById(empId);
+    }
   });
-  tbody.querySelectorAll("[data-delete]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = Number(/** @type {HTMLElement} */ (btn).dataset.delete);
-      const ok = await openModal(
-        "Mitarbeitende/n löschen",
-        "<div>Zugehörige Zuweisungen werden ebenfalls entfernt. Fortfahren?</div>",
-        { confirmText: "Ja, löschen", confirmDanger: true }
-      );
-      if (!ok) return;
-      recordUndoSnapshot();
-      state.employees = state.employees.filter((e) => Number(e.ID) !== id);
-      state.assignments = state.assignments.filter((a) => Number(a.Employee_ID) !== id);
-      await persist();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
-    });
+}
+
+function setupQuickReturnDateButtons() {
+  const ws = /** @type {HTMLElement | null} */ ($("#app-workspace"));
+  if (!ws || ws.dataset.quickReturn === "1") return;
+  ws.dataset.quickReturn = "1";
+  ws.addEventListener("click", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const btn = el?.closest("button[data-quick-return]");
+    if (!(btn instanceof HTMLButtonElement)) return;
+    ev.preventDefault();
+    const fieldId = btn.getAttribute("data-quick-return");
+    const days = Number(btn.getAttribute("data-days"));
+    const inp = fieldId ? document.getElementById(fieldId) : null;
+    if (inp instanceof HTMLInputElement && Number.isFinite(days)) {
+      inp.value = addDaysFromTodayISO(days);
+      inp.focus();
+    }
   });
 }
 
 function loadEmployeeIntoForm(id) {
-  const e = getEmployee(id);
-  if (!e) return;
-  /** @type {HTMLInputElement} */ ($("#emp-id")).value = String(e.ID);
-  /** @type {HTMLInputElement} */ ($("#emp-pnr")).value = e.Personalnummer;
-  /** @type {HTMLInputElement} */ ($("#emp-vorname")).value = e.Vorname;
-  /** @type {HTMLInputElement} */ ($("#emp-nachname")).value = e.Nachname;
-  /** @type {HTMLSelectElement} */ ($("#emp-qual")).value = e.Qualifikation;
-  /** @type {HTMLInputElement} */ ($("#emp-tags")).value = (e.Zusatz_Tags || []).join(", ");
-  /** @type {HTMLSelectElement} */ ($("#emp-tl")).value =
-    e.Teamleiter_ID != null && e.Teamleiter_ID !== "" && hasValidTeamLeader(e)
-      ? String(e.Teamleiter_ID)
-      : "";
-  /** @type {HTMLSelectElement} */ ($("#emp-status")).value = e.Status;
-  /** @type {HTMLInputElement} */ ($("#emp-rueck")).value = e.Rückkehr_erwartet_am ?? "";
-  /** @type {HTMLInputElement} */ ($("#emp-plan-ab")).value = e.Abwesenheit_geplant_ab ?? "";
-  /** @type {HTMLInputElement} */ ($("#emp-plan-bis")).value = e.Abwesenheit_geplant_bis ?? "";
-  $("#employee-form-title").innerHTML =
-    '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
+  try {
+    const e = getEmployee(id);
+    if (!e) return;
+    /** @type {HTMLInputElement} */ ($("#emp-id")).value = String(e.ID);
+    /** @type {HTMLInputElement} */ ($("#emp-pnr")).value = String(e.Personalnummer ?? "");
+    /** @type {HTMLInputElement} */ ($("#emp-vorname")).value = String(e.Vorname ?? "");
+    /** @type {HTMLInputElement} */ ($("#emp-nachname")).value = String(e.Nachname ?? "");
+    const qualSel = /** @type {HTMLSelectElement} */ ($("#emp-qual"));
+    ensureSelectHasValue(qualSel, e.Qualifikation, String(e.Qualifikation ?? ""));
+    /** @type {HTMLInputElement} */ ($("#emp-tags")).value = (e.Zusatz_Tags || []).join(", ");
+    /** @type {HTMLSelectElement} */ ($("#emp-tl")).value =
+      e.Teamleiter_ID != null && e.Teamleiter_ID !== "" && hasValidTeamLeader(e)
+        ? String(e.Teamleiter_ID)
+        : "";
+    const statusSel = /** @type {HTMLSelectElement} */ ($("#emp-status"));
+    ensureSelectHasValue(statusSel, e.Status, String(e.Status ?? ""));
+    /** @type {HTMLInputElement} */ ($("#emp-rueck")).value =
+      e.Rückkehr_erwartet_am != null && e.Rückkehr_erwartet_am !== ""
+        ? String(e.Rückkehr_erwartet_am)
+        : "";
+    /** @type {HTMLInputElement} */ ($("#emp-plan-ab")).value =
+      e.Abwesenheit_geplant_ab != null && e.Abwesenheit_geplant_ab !== ""
+        ? String(e.Abwesenheit_geplant_ab)
+        : "";
+    /** @type {HTMLInputElement} */ ($("#emp-plan-bis")).value =
+      e.Abwesenheit_geplant_bis != null && e.Abwesenheit_geplant_bis !== ""
+        ? String(e.Abwesenheit_geplant_bis)
+        : "";
+    $("#employee-form-title").innerHTML =
+      '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
+    syncEditAbsenceHint();
+    const panel = /** @type {HTMLElement | null} */ ($("#employee-edit-panel"));
+    if (panel) {
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      panel.focus({ preventScroll: true });
+      panel.classList.add("panel--focus");
+      window.setTimeout(() => panel.classList.remove("panel--focus"), 1200);
+    }
+  } catch (err) {
+    console.error("loadEmployeeIntoForm", err);
+    void openModal(
+      "Bearbeiten",
+      "<div>Die Stammdaten konnten nicht geladen werden. Details siehe Konsole.</div>",
+      { variant: "info", confirmText: "Verstanden" }
+    );
+  }
 }
 
 function resetEmployeeForm() {
@@ -1178,6 +1292,7 @@ function resetEmployeeForm() {
   /** @type {HTMLInputElement} */ ($("#emp-id")).value = "";
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
+  syncEditAbsenceHint();
 }
 
 function fillNewEmployeeSelects() {
@@ -1215,12 +1330,17 @@ function renderPersonnelView() {
   fillTeamLeaderSelect();
   renderTeamLeadersTable();
   renderPersonnelTable();
+  syncEditAbsenceHint();
+  syncNewAbsenceHint();
 }
 
 function setupPersonnelInteractions() {
   $("#personnel-search").addEventListener("input", renderPersonnelTable);
   $("#personnel-filter-status").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-qual").addEventListener("change", renderPersonnelTable);
+
+  $("#emp-status").addEventListener("change", syncEditAbsenceHint);
+  $("#new-emp-status").addEventListener("change", syncNewAbsenceHint);
 
   $("#emp-reset").addEventListener("click", resetEmployeeForm);
 
@@ -1246,7 +1366,7 @@ function setupPersonnelInteractions() {
     if (planAb && planBis && planBis < planAb) {
       await openModal(
         "Datum prüfen",
-        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        "<div>„Geplanter freier Zeitraum bis“ darf nicht vor „von“ liegen.</div>",
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
@@ -1285,7 +1405,7 @@ function setupPersonnelInteractions() {
     if (planAbNew && planBisNew && planBisNew < planAbNew) {
       await openModal(
         "Datum prüfen",
-        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        "<div>„Geplanter freier Zeitraum bis“ darf nicht vor „von“ liegen.</div>",
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
@@ -1493,6 +1613,8 @@ function boot() {
   setupDashboardDnD();
   setupProjectsInteractions();
   setupPersonnelInteractions();
+  setupPersonnelTableActions();
+  setupQuickReturnDateButtons();
   setupDndAssignModal();
   setupProjectDropDelegation();
   setupFileLinking();

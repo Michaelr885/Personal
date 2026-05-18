@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Personal- & Projektplanung</title>
+    <link rel="icon" href="data:," />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -248,7 +249,7 @@
               </div>
             </div>
 
-            <div class="panel">
+            <div class="panel" id="new-employee-panel">
               <div class="panel__head">
                 <h2><i class="fa-solid fa-user-plus"></i> Neuen Mitarbeiter anlegen</h2>
               </div>
@@ -273,6 +274,10 @@
                   Teamleitung (optional)
                   <select id="new-emp-tl"></select>
                 </label>
+                <div class="form-section span-2">
+                  <h3 class="form-section__title"><i class="fa-solid fa-umbrella-beach"></i> Abwesenheit &amp; Urlaub</h3>
+                  <p class="hint" id="new-emp-absence-hint"></p>
+                  <div class="form-grid form-grid--wide form-section__grid">
                 <label>
                   Status
                   <select id="new-emp-status" required>
@@ -282,22 +287,25 @@
                   </select>
                 </label>
                 <label>
-                  Erwartete Rückkehr (bei Krank/Urlaub, optional)
+                  <span class="label-with-actions">
+                    <span>Zurück an Arbeit am (bei Krank / Urlaub)</span>
+                    <span class="quick-date-actions">
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-rueck" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="new-emp-rueck" data-days="14">+2 Wo.</button>
+                    </span>
+                  </span>
                   <input type="date" id="new-emp-rueck" />
                 </label>
                 <label>
-                  Geplante Abwesenheit ab (optional)
+                  Geplanter freier Zeitraum von (nur bei „Verfügbar“)
                   <input type="date" id="new-emp-plan-ab" />
                 </label>
                 <label>
-                  Geplante Abwesenheit bis (optional)
+                  Geplanter freier Zeitraum bis
                   <input type="date" id="new-emp-plan-bis" />
                 </label>
-                <p class="hint span-2">
-                  Bei Status <strong>Verfügbar</strong> erscheint ab fünf Tage vor „Abwesenheit ab“ ein Hinweis im
-                  Dashboard und im Ressourcen-Pool. Bei <strong>Krank</strong> oder <strong>Urlaub</strong> nutzen Sie
-                  „Erwartete Rückkehr“ für die Tages-Anzeige bis zur Rückkehr.
-                </p>
+                  </div>
+                </div>
                 <div class="form-actions span-2">
                   <button type="submit" class="btn btn--primary">
                     <i class="fa-solid fa-user-plus"></i> Mitarbeiter anlegen
@@ -306,15 +314,14 @@
               </form>
             </div>
 
-            <div class="panel">
+            <div class="panel" id="employee-edit-panel" tabindex="-1">
               <div class="panel__head">
                 <h2 id="employee-form-title">
                   <i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten
                 </h2>
               </div>
               <p class="hint" id="edit-form-hint">
-                Wählen Sie in der Tabelle das Stift-Symbol, um Stammdaten (inkl. Tags und Abwesenheitsdaten) zu
-                bearbeiten.
+                Stift in der Tabelle: Formular füllt sich unten; die Seite scrollt zum Bearbeiten-Bereich.
               </p>
               <form id="employee-form" class="form-grid form-grid--wide">
                 <input type="hidden" id="emp-id" />
@@ -342,6 +349,10 @@
                   Teamleitung (optional)
                   <select id="emp-tl"></select>
                 </label>
+                <div class="form-section span-2">
+                  <h3 class="form-section__title"><i class="fa-solid fa-umbrella-beach"></i> Abwesenheit &amp; Urlaub</h3>
+                  <p class="hint" id="emp-absence-hint"></p>
+                  <div class="form-grid form-grid--wide form-section__grid">
                 <label>
                   Status
                   <select id="emp-status" required>
@@ -351,21 +362,25 @@
                   </select>
                 </label>
                 <label>
-                  Erwartete Rückkehr (bei Krank/Urlaub, optional)
+                  <span class="label-with-actions">
+                    <span>Zurück an Arbeit am (bei Krank / Urlaub)</span>
+                    <span class="quick-date-actions">
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-rueck" data-days="7">+1 Wo.</button>
+                      <button type="button" class="btn btn--ghost btn--tiny" data-quick-return="emp-rueck" data-days="14">+2 Wo.</button>
+                    </span>
+                  </span>
                   <input type="date" id="emp-rueck" />
                 </label>
                 <label>
-                  Geplante Abwesenheit ab (optional)
+                  Geplanter freier Zeitraum von (nur bei „Verfügbar“)
                   <input type="date" id="emp-plan-ab" />
                 </label>
                 <label>
-                  Geplante Abwesenheit bis (optional)
+                  Geplanter freier Zeitraum bis
                   <input type="date" id="emp-plan-bis" />
                 </label>
-                <p class="hint span-2">
-                  Ab fünf Tage vor „Geplant ab“ erscheint ein Hinweis bei verfügbaren Personen. Bei Krank/Urlaub
-                  zeigt die App die Tage bis zur erwarteten Rückkehr.
-                </p>
+                  </div>
+                </div>
                 <div class="form-actions span-2">
                   <button type="submit" class="btn btn--primary">
                     <i class="fa-solid fa-save"></i> Speichern
