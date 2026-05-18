@@ -244,6 +244,89 @@ code {
   gap: 1rem;
 }
 
+/* Dashboard: ohne Teamleitung + Drag & Drop */
+.panel--unassigned {
+  border-style: dashed;
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, #fffbeb 0%, var(--surface) 48%);
+}
+
+.dashboard-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+  margin-top: 0.35rem;
+}
+
+.dashboard-emp-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  border: 1px dashed #94a3b8;
+  background: linear-gradient(145deg, #fafafa, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  cursor: grab;
+  max-width: 220px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.dashboard-emp-chip:active {
+  cursor: grabbing;
+}
+
+.dashboard-emp-chip:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+}
+
+.dashboard-emp-chip__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.team-drop-zone {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.team-drop-zone--active {
+  outline: 2px dashed var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15), var(--shadow);
+  background: var(--primary-soft);
+}
+
+.panel--unassigned.team-drop-zone--active {
+  background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
+}
+
+.card-team.team-drop-zone--active {
+  background: linear-gradient(180deg, var(--primary-soft) 0%, var(--surface) 40%);
+}
+
+.card-team li[draggable="true"] {
+  cursor: grab;
+  border: 1px solid transparent;
+}
+
+.card-team li[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.card-team li[draggable="true"]:hover {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

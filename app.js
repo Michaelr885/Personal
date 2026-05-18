@@ -277,10 +277,36 @@ function switchView(name) {
   if (name === "personnel") renderPersonnelView();
 }
 
+function hasValidTeamLeader(emp) {
+  const raw = emp.Teamleiter_ID;
+  if (raw === null || raw === undefined || raw === "") return false;
+  const id = Number(raw);
+  if (!Number.isFinite(id)) return false;
+  return !!getTeamLeader(id);
+}
+
+function employeesWithoutTeamLeader() {
+  if (!state) return [];
+  return state.employees.filter((e) => !hasValidTeamLeader(e));
+}
+
 function renderDashboard() {
   if (!state) return;
   const root = /** @type {HTMLElement} */ ($("#dashboard-content"));
   const today = todayISO();
+
+  const unassigned = employeesWithoutTeamLeader();
+  const unassignedChips =
+    unassigned.length === 0
+      ? '<p class="hint">Alle Mitarbeitenden sind einer Teamleitung zugeordnet.</p>'
+      : `<div class="dashboard-chip-row" aria-label="Ohne Teamleitung">${unassigned
+          .map(
+            (e) => `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
+            <span class="dashboard-emp-chip__name">${escapeHtml(e.Vorname)} ${escapeHtml(e.Nachname)}</span>
+            <span class="tag-mini">${escapeHtml(e.Qualifikation)}</span>
+          </div>`
+          )
+          .join("")}</div>`;
 
   const teamCards = state.team_leaders
     .map((tl) => {
@@ -304,7 +330,7 @@ function renderDashboard() {
                 ? `<span class="warn-cert"><i class="fa-solid fa-circle-xmark"></i> abgelaufen</span>`
                 : "";
           const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li>
+          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Zu anderer Teamleitung oder in „Ohne Teamleitung“ ziehen">
             <span>${m.Vorname} ${m.Nachname} <span class="tag-mini">${m.Qualifikation}</span></span>
             <span>${
               onProject
@@ -314,12 +340,12 @@ function renderDashboard() {
           </li>`;
         })
         .join("");
-      return `<article class="panel card-team" style="--team-color:${tl.Team_Farbe}">
+      return `<article class="panel card-team team-drop-zone" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
         <div class="card-team__title">
-          <strong>${tl.Name}</strong>
+          <strong>${escapeHtml(tl.Name)}</strong>
           <span class="badge">${assignedCount} heute im Projekt</span>
         </div>
-        <div class="hint">Mitarbeitende erscheinen nur unter ihrer Teamleitung (Stammdaten).</div>
+        <div class="hint">Person hierher ziehen, um sie dieser Teamleitung zuzuordnen. Aus der Liste auf „Ohne Teamleitung“ ziehen, um die Zuordnung zu entfernen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -352,6 +378,17 @@ function renderDashboard() {
     .join("");
 
   root.innerHTML = `
+    <div class="panel panel--unassigned team-drop-zone" data-drop-unassigned="1">
+      <div class="panel__head">
+        <h2><i class="fa-solid fa-user-slash"></i> Ohne Teamleitung</h2>
+        <span class="badge badge--muted">${unassigned.length} Person(en)</span>
+      </div>
+      <p class="hint">
+        Diese Mitarbeitenden haben keine gültige Teamleiter-Zuordnung. Ziehen Sie sie auf eine
+        Teamkarte unten – oder weisen Sie die Teamleitung in der Personalverwaltung zu.
+      </p>
+      ${unassignedChips}
+    </div>
     <div class="grid-dashboard">${teamCards}</div>
     <div class="panel">
       <div class="panel__head"><h2><i class="fa-solid fa-bed-pulse"></i> Abwesenheiten</h2></div>
@@ -853,7 +890,10 @@ function loadEmployeeIntoForm(id) {
   /** @type {HTMLInputElement} */ ($("#emp-nachname")).value = e.Nachname;
   /** @type {HTMLSelectElement} */ ($("#emp-qual")).value = e.Qualifikation;
   /** @type {HTMLInputElement} */ ($("#emp-tags")).value = (e.Zusatz_Tags || []).join(", ");
-  /** @type {HTMLSelectElement} */ ($("#emp-tl")).value = String(e.Teamleiter_ID);
+  /** @type {HTMLSelectElement} */ ($("#emp-tl")).value =
+    e.Teamleiter_ID != null && e.Teamleiter_ID !== "" && hasValidTeamLeader(e)
+      ? String(e.Teamleiter_ID)
+      : "";
   /** @type {HTMLSelectElement} */ ($("#emp-status")).value = e.Status;
   /** @type {HTMLInputElement} */ ($("#emp-cert")).value = e.Zertifikat_Gültig_Bis;
   $("#employee-form-title").innerHTML =
@@ -890,9 +930,9 @@ function fillQualificationSelects() {
 function fillTeamLeaderSelect() {
   if (!state) return;
   const sel = /** @type {HTMLSelectElement} */ ($("#emp-tl"));
-  sel.innerHTML = state.team_leaders
-    .map((t) => `<option value="${t.ID}">${t.Name}</option>`)
-    .join("");
+  sel.innerHTML =
+    '<option value="">Keine Teamleitung</option>' +
+    state.team_leaders.map((t) => `<option value="${t.ID}">${t.Name}</option>`).join("");
 }
 
 function renderPersonnelView() {
@@ -924,13 +964,14 @@ function setupPersonnelInteractions() {
       .value.split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+    const tlRaw = /** @type {HTMLSelectElement} */ ($("#emp-tl")).value;
     const payload = {
       Personalnummer: /** @type {HTMLInputElement} */ ($("#emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#emp-vorname")).value.trim(),
       Nachname: /** @type {HTMLInputElement} */ ($("#emp-nachname")).value.trim(),
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#emp-qual")).value,
       Zusatz_Tags: tags,
-      Teamleiter_ID: Number(/** @type {HTMLSelectElement} */ ($("#emp-tl")).value),
+      Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
       Zertifikat_Gültig_Bis: /** @type {HTMLInputElement} */ ($("#emp-cert")).value,
     };
@@ -1018,10 +1059,87 @@ function setupFileLinking() {
   });
 }
 
+let dashboardDnDActiveZone = null;
+
+function setupDashboardDnD() {
+  const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
+  if (!view || view.dataset.dashboardDnd === "1") return;
+  view.dataset.dashboardDnd = "1";
+
+  view.addEventListener("dragstart", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const row = /** @type {HTMLElement | null} */ (el?.closest("[data-dashboard-employee]"));
+    if (!row) return;
+    const id = row.getAttribute("data-dashboard-employee");
+    if (!id) return;
+    ev.dataTransfer.setData("text/plain", id);
+    ev.dataTransfer.setData("application/x-employee-id", id);
+    ev.dataTransfer.effectAllowed = "move";
+  });
+
+  view.addEventListener("dragover", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const zone = /** @type {HTMLElement | null} */ (
+      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+    );
+    if (!zone) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "move";
+    if (dashboardDnDActiveZone && dashboardDnDActiveZone !== zone) {
+      dashboardDnDActiveZone.classList.remove("team-drop-zone--active");
+    }
+    dashboardDnDActiveZone = zone;
+    zone.classList.add("team-drop-zone--active");
+  });
+
+  view.addEventListener("dragleave", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const zone = /** @type {HTMLElement | null} */ (
+      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+    );
+    if (!zone) return;
+    const rel = /** @type {Node | null} */ (ev.relatedTarget);
+    if (!rel || !zone.contains(rel)) {
+      zone.classList.remove("team-drop-zone--active");
+      if (dashboardDnDActiveZone === zone) dashboardDnDActiveZone = null;
+    }
+  });
+
+  view.addEventListener("drop", async (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const zone = /** @type {HTMLElement | null} */ (
+      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+    );
+    if (!zone || !state) return;
+    ev.preventDefault();
+    zone.classList.remove("team-drop-zone--active");
+    dashboardDnDActiveZone = null;
+    const empId =
+      ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
+    if (!empId) return;
+    const emp = getEmployee(empId);
+    if (!emp) return;
+    if (zone.hasAttribute("data-drop-unassigned")) {
+      emp.Teamleiter_ID = null;
+    } else {
+      const tlId = zone.getAttribute("data-drop-teamleader");
+      if (!tlId || !getTeamLeader(tlId)) return;
+      if (Number(emp.Teamleiter_ID) === Number(tlId)) return;
+      emp.Teamleiter_ID = Number(tlId);
+    }
+    await persist();
+    renderDashboard();
+    if ($("#view-personnel").classList.contains("view--active")) {
+      renderPersonnelView();
+    }
+  });
+}
+
 function boot() {
   closeAllModalsAndBackdrops();
   state = null;
   setupNavigation();
+  setupDashboardDnD();
   setupProjectsInteractions();
   setupPersonnelInteractions();
   setupDndAssignModal();
