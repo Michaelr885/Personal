@@ -337,6 +337,15 @@ code {
   touch-action: none;
 }
 
+/* Finger liegt auf dem Chip — sonst liefert elementFromPoint nur das Drag-Element, nicht die Drop-Zone. */
+.dashboard-emp-chip.dashboard-emp-dragging,
+.card-team li.dashboard-emp-dragging {
+  pointer-events: none;
+  opacity: 0.88;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .card-team li[draggable="true"] {
   cursor: grab;
   border: 1px solid transparent;
