@@ -267,6 +267,18 @@
                     <span>Qualifikation</span>
                     <select id="personnel-filter-qual"></select>
                   </label>
+                  <label class="field-inline">
+                    <span>AÜG/Eigene</span>
+                    <select id="personnel-filter-beschäftigung">
+                      <option value="">Alle</option>
+                      <option>AÜG</option>
+                      <option>Eigene</option>
+                    </select>
+                  </label>
+                  <label class="field-inline">
+                    <span>Stufe</span>
+                    <select id="personnel-filter-stufe"></select>
+                  </label>
                 </div>
               </div>
               <div class="table-wrap">
@@ -276,6 +288,8 @@
                       <th>Pers.-Nr.</th>
                       <th>Name</th>
                       <th>Qualifikation</th>
+                      <th>AÜG/Eigene</th>
+                      <th>Stufe</th>
                       <th>Teamleitung</th>
                       <th>Status</th>
                       <th>Abwesenheit / Plan</th>
@@ -307,6 +321,17 @@
                 <label>
                   Qualifikation
                   <select id="new-emp-qual" required></select>
+                </label>
+                <label>
+                  AÜG/Eigene
+                  <select id="new-emp-beschäftigung" required>
+                    <option>Eigene</option>
+                    <option>AÜG</option>
+                  </select>
+                </label>
+                <label>
+                  Stufe
+                  <input type="text" id="new-emp-stufe" maxlength="40" placeholder="optional" autocomplete="off" />
                 </label>
                 <label>
                   Teamleitung (optional)
@@ -390,6 +415,17 @@
                 <label>
                   Qualifikation
                   <select id="emp-qual" required></select>
+                </label>
+                <label>
+                  AÜG/Eigene
+                  <select id="emp-beschäftigung" required>
+                    <option>AÜG</option>
+                    <option>Eigene</option>
+                  </select>
+                </label>
+                <label>
+                  Stufe
+                  <input type="text" id="emp-stufe" maxlength="40" placeholder="z. B. 1A" autocomplete="off" />
                 </label>
                 <label class="span-2">
                   Zusatz-Tags (Komma-getrennt)

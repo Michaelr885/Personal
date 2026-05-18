@@ -40,6 +40,8 @@ export function createMockDataset() {
         Qualifikation: "Monteur",
         Zusatz_Tags: ["Höhenarbeit", "Kran"],
         Teamleiter_ID: 1,
+        Beschäftigung: "Eigene",
+        Stufe: "2",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -57,6 +59,8 @@ export function createMockDataset() {
         Qualifikation: "Schweißer",
         Zusatz_Tags: ["MAG", "WIG"],
         Teamleiter_ID: 1,
+        Beschäftigung: "AÜG",
+        Stufe: "1",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -74,6 +78,8 @@ export function createMockDataset() {
         Qualifikation: "Monteur",
         Zusatz_Tags: ["Schalung"],
         Teamleiter_ID: 2,
+        Beschäftigung: "Eigene",
+        Stufe: "3",
         Status: "Krank",
         Krank_ab: addDays(t, -2),
         Krank_bis: addDays(t, 2),
@@ -91,6 +97,8 @@ export function createMockDataset() {
         Qualifikation: "Bauleiter",
         Zusatz_Tags: ["SiGeKo"],
         Teamleiter_ID: 2,
+        Beschäftigung: "AÜG",
+        Stufe: "Bau",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -108,6 +116,8 @@ export function createMockDataset() {
         Qualifikation: "Schweißer",
         Zusatz_Tags: ["Stahl"],
         Teamleiter_ID: 2,
+        Beschäftigung: "Eigene",
+        Stufe: "2",
         Status: "Urlaub",
         Krank_ab: null,
         Krank_bis: null,
@@ -125,6 +135,8 @@ export function createMockDataset() {
         Qualifikation: "Monteur",
         Zusatz_Tags: ["Führerschein CE"],
         Teamleiter_ID: 3,
+        Beschäftigung: "AÜG",
+        Stufe: "1",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -142,6 +154,8 @@ export function createMockDataset() {
         Qualifikation: "Elektriker",
         Zusatz_Tags: ["MSR"],
         Teamleiter_ID: 3,
+        Beschäftigung: "Eigene",
+        Stufe: "ET",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -159,6 +173,8 @@ export function createMockDataset() {
         Qualifikation: "Monteur",
         Zusatz_Tags: [],
         Teamleiter_ID: 3,
+        Beschäftigung: "Eigene",
+        Stufe: "",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -260,6 +276,16 @@ function normalizeDataset(raw) {
     if (e.Krank_bis === undefined) e.Krank_bis = null;
     if (e.Urlaub_ab === undefined) e.Urlaub_ab = null;
     if (e.Urlaub_bis === undefined) e.Urlaub_bis = null;
+
+    const bRaw = e.Beschäftigung;
+    if (bRaw === undefined || bRaw === null || bRaw === "") {
+      e.Beschäftigung = "Eigene";
+    } else {
+      const b = String(bRaw).trim();
+      e.Beschäftigung = b === "AÜG" ? "AÜG" : "Eigene";
+    }
+    if (e.Stufe === undefined || e.Stufe === null) e.Stufe = "";
+    else e.Stufe = String(e.Stufe).trim();
 
     const legacyAb = e.Abwesenheit_geplant_ab;
     const urlaubAbEmpty = e.Urlaub_ab == null || e.Urlaub_ab === "";

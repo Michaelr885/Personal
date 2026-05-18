@@ -5,7 +5,7 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null }} Employee */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -17,6 +17,24 @@ const QUALIFICATIONS = [
   "Elektriker",
   "Lagerist",
 ];
+
+const BESCHÄFTIGUNG_AÜG = "AÜG";
+const BESCHÄFTIGUNG_EIGENE = "Eigene";
+
+/** @param {unknown} raw @returns {"AÜG"|"Eigene"} */
+function normalizeBeschäftigung(raw) {
+  const s = String(raw ?? "").trim();
+  if (s === BESCHÄFTIGUNG_AÜG) return BESCHÄFTIGUNG_AÜG;
+  return BESCHÄFTIGUNG_EIGENE;
+}
+
+function normalizeAllEmployeesShape() {
+  if (!state) return;
+  for (const emp of state.employees) {
+    emp.Beschäftigung = normalizeBeschäftigung(emp.Beschäftigung);
+    emp.Stufe = emp.Stufe != null && emp.Stufe !== "" ? String(emp.Stufe).trim() : "";
+  }
+}
 
 /** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[] } | null} */
 let state = null;
@@ -62,6 +80,7 @@ async function undoLastChange() {
   historySuspended = true;
   try {
     state = /** @type {typeof state} */ (JSON.parse(prevJson));
+    normalizeAllEmployeesShape();
     await persist();
     refreshAllDataViews();
   } finally {
@@ -77,6 +96,7 @@ async function redoLastChange() {
   historySuspended = true;
   try {
     state = /** @type {typeof state} */ (JSON.parse(nextJson));
+    normalizeAllEmployeesShape();
     await persist();
     refreshAllDataViews();
   } finally {
@@ -1738,6 +1758,8 @@ function renderPersonnelTable() {
   const q = /** @type {HTMLInputElement} */ ($("#personnel-search")).value.trim().toLowerCase();
   const st = /** @type {HTMLSelectElement} */ ($("#personnel-filter-status")).value;
   const fq = /** @type {HTMLSelectElement} */ ($("#personnel-filter-qual")).value;
+  const fBesch = /** @type {HTMLSelectElement} */ ($("#personnel-filter-beschäftigung")).value;
+  const fStufe = /** @type {HTMLSelectElement} */ ($("#personnel-filter-stufe")).value;
 
   const rows = state.employees
     .filter((e) => {
@@ -1745,15 +1767,21 @@ function renderPersonnelTable() {
       if (q && !hay.includes(q)) return false;
       if (st && e.Status !== st) return false;
       if (fq && e.Qualifikation !== fq) return false;
+      if (fBesch && normalizeBeschäftigung(e.Beschäftigung) !== fBesch) return false;
+      if (fStufe && String(e.Stufe ?? "").trim() !== fStufe) return false;
       return true;
     })
     .map((e) => {
       const tl = getTeamLeader(e.Teamleiter_ID);
       const sc = statusCellClass(e.Status);
+      const besch = normalizeBeschäftigung(e.Beschäftigung);
+      const stufe = String(e.Stufe ?? "").trim();
       return `<tr>
         <td>${e.Personalnummer}</td>
         <td>${e.Vorname} ${e.Nachname}</td>
         <td>${e.Qualifikation}</td>
+        <td>${escapeHtml(besch)}</td>
+        <td>${stufe ? escapeHtml(stufe) : "—"}</td>
         <td>${tl ? escapeHtml(tl.Name) : "Keine"}</td>
         <td class="${sc}">${e.Status}</td>
         <td class="hint">${escapeHtml(absenceSummaryPlain(e))}</td>
@@ -1765,7 +1793,7 @@ function renderPersonnelTable() {
     })
     .join("");
   tbody.innerHTML =
-    rows || '<tr><td colspan="7" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+    rows || '<tr><td colspan="9" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
 }
 
 async function deleteEmployeeById(id) {
@@ -1839,6 +1867,10 @@ function loadEmployeeIntoForm(id) {
     /** @type {HTMLInputElement} */ ($("#emp-nachname")).value = String(e.Nachname ?? "");
     const qualSel = /** @type {HTMLSelectElement} */ ($("#emp-qual"));
     ensureSelectHasValue(qualSel, e.Qualifikation, String(e.Qualifikation ?? ""));
+    const beschSel = /** @type {HTMLSelectElement} */ ($("#emp-beschäftigung"));
+    ensureSelectHasValue(beschSel, normalizeBeschäftigung(e.Beschäftigung), normalizeBeschäftigung(e.Beschäftigung));
+    /** @type {HTMLInputElement} */ ($("#emp-stufe")).value =
+      e.Stufe != null && e.Stufe !== "" ? String(e.Stufe) : "";
     /** @type {HTMLInputElement} */ ($("#emp-tags")).value = (e.Zusatz_Tags || []).join(", ");
     /** @type {HTMLSelectElement} */ ($("#emp-tl")).value =
       e.Teamleiter_ID != null && e.Teamleiter_ID !== "" && hasValidTeamLeader(e)
@@ -1915,9 +1947,23 @@ function fillTeamLeaderSelect() {
     state.team_leaders.map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`).join("");
 }
 
+function fillPersonnelStufeFilter() {
+  if (!state) return;
+  const sel = /** @type {HTMLSelectElement} */ ($("#personnel-filter-stufe"));
+  const prev = sel.value;
+  const stufen = [
+    ...new Set(state.employees.map((e) => String(e.Stufe ?? "").trim()).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "de"));
+  sel.innerHTML =
+    '<option value="">Alle</option>' +
+    stufen.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
 function renderPersonnelView() {
   fillQualificationSelects();
   fillTeamLeaderSelect();
+  fillPersonnelStufeFilter();
   renderTeamLeadersTable();
   renderPersonnelTable();
   syncEditAbsenceHint();
@@ -1928,6 +1974,8 @@ function setupPersonnelInteractions() {
   $("#personnel-search").addEventListener("input", renderPersonnelTable);
   $("#personnel-filter-status").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-qual").addEventListener("change", renderPersonnelTable);
+  $("#personnel-filter-beschäftigung").addEventListener("change", renderPersonnelTable);
+  $("#personnel-filter-stufe").addEventListener("change", renderPersonnelTable);
 
   $("#emp-status").addEventListener("change", syncEditAbsenceHint);
   $("#new-emp-status").addEventListener("change", syncNewAbsenceHint);
@@ -1978,6 +2026,8 @@ function setupPersonnelInteractions() {
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#emp-qual")).value,
       Zusatz_Tags: tags,
       Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
+      Beschäftigung: normalizeBeschäftigung(/** @type {HTMLSelectElement} */ ($("#emp-beschäftigung")).value),
+      Stufe: /** @type {HTMLInputElement} */ ($("#emp-stufe")).value.trim(),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
       Krank_ab: kAb,
       Krank_bis: kBis,
@@ -2029,6 +2079,8 @@ function setupPersonnelInteractions() {
       Vorname: /** @type {HTMLInputElement} */ ($("#new-emp-vorname")).value.trim(),
       Nachname: /** @type {HTMLInputElement} */ ($("#new-emp-nachname")).value.trim(),
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).value,
+      Beschäftigung: normalizeBeschäftigung(/** @type {HTMLSelectElement} */ ($("#new-emp-beschäftigung")).value),
+      Stufe: /** @type {HTMLInputElement} */ ($("#new-emp-stufe")).value.trim(),
       Teamleiter_ID: (() => {
         const raw = /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value;
         return raw === "" ? null : Number(raw);
