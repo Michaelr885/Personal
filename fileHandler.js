@@ -27,9 +27,9 @@ export function createMockDataset() {
   const t = todayISO();
   return {
     team_leaders: [
-      { ID: 1, Name: "Anna Schmidt", Team_Farbe: "#2563eb" },
-      { ID: 2, Name: "Markus Weber", Team_Farbe: "#059669" },
-      { ID: 3, Name: "Laura Chen", Team_Farbe: "#d97706" },
+      { ID: 1, Name: "Anna Schmidt", Team_Farbe: "#2563eb", Abteilung: "Mechanik", Reihenfolge: 0 },
+      { ID: 2, Name: "Markus Weber", Team_Farbe: "#059669", Abteilung: "Steriltechnik", Reihenfolge: 1 },
+      { ID: 3, Name: "Laura Chen", Team_Farbe: "#d97706", Abteilung: "Rohrfertigung", Reihenfolge: 2 },
     ],
     employees: [
       {
@@ -317,6 +317,30 @@ function normalizeDataset(raw) {
       e.Urlaub_bis = addDays(String(rück), -1);
     }
   }
+
+  const ABTL = ["Mechanik", "Steriltechnik", "Kunststofftechnik und Gewerbe", "Rohrfertigung"];
+  const normTLAbt = (raw) => {
+    const s = String(raw ?? "").trim();
+    return ABTL.includes(s) ? s : ABTL[0];
+  };
+  for (let i = 0; i < team_leaders.length; i++) {
+    const row = team_leaders[i];
+    if (!row || typeof row !== "object") continue;
+    const t = /** @type {Record<string, unknown>} */ (row);
+    t.Abteilung = normTLAbt(t.Abteilung);
+    const ro = Number(t.Reihenfolge);
+    t.Reihenfolge = Number.isFinite(ro) ? ro : i * 10;
+  }
+  team_leaders.sort(
+    (a, b) =>
+      (Number(/** @type {{ Reihenfolge?: number }} */ (a).Reihenfolge) || 0) -
+        (Number(/** @type {{ Reihenfolge?: number }} */ (b).Reihenfolge) || 0) ||
+      (Number(/** @type {{ ID?: number }} */ (a).ID) || 0) - (Number(/** @type {{ ID?: number }} */ (b).ID) || 0)
+  );
+  team_leaders.forEach((row, i) => {
+    if (row && typeof row === "object") /** @type {{ Reihenfolge: number }} */ (row).Reihenfolge = i;
+  });
+
   return { team_leaders, employees, projects, assignments };
 }
 
