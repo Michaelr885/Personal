@@ -1268,6 +1268,10 @@ textarea {
   );
 }
 
+.urlaub-plan__track--pick {
+  cursor: cell;
+}
+
 .urlaub-plan__track {
   grid-template-rows: repeat(var(--urlaub-rows, 1), minmax(14px, auto));
   gap: 2px 0;

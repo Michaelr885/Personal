@@ -905,7 +905,7 @@ function renderUrlaubPlan() {
     const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
     return `<div class="urlaub-plan__row">
       <div class="urlaub-plan__namecell">${name}</div>
-      <div class="urlaub-plan__track urlaub-plan--daylines" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}">${bars}</div>
+      <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche anklicken: Urlaub eintragen">${bars}</div>
     </div>`;
   });
 
@@ -1002,6 +1002,114 @@ function setupUrlaubView() {
     el.addEventListener("input", () => renderUrlaubPlan());
     el.addEventListener("change", () => renderUrlaubPlan());
   }
+}
+
+function closeUrlaubGanttBlockModal() {
+  const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
+  const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
+  if (bd) bd.hidden = true;
+  if (md) md.hidden = true;
+}
+
+function openUrlaubGanttBlockModal(empId, vonISO, bisISO) {
+  const emp = getEmployee(empId);
+  if (!emp) return;
+  /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-emp-id")).value = String(emp.ID);
+  const nameEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-name"));
+  if (nameEl) nameEl.textContent = `${emp.Vorname} ${emp.Nachname}`.trim();
+  const vEl = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-von"));
+  const bEl = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-bis"));
+  if (vEl) vEl.value = vonISO;
+  if (bEl) bEl.value = bisISO;
+  const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
+  const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
+  if (bd) bd.hidden = false;
+  if (md) md.hidden = false;
+  vEl?.focus();
+}
+
+function setupUrlaubGanttBlockModal() {
+  const wrap = /** @type {HTMLElement | null} */ (document.querySelector(".urlaub-plan-wrap"));
+  if (!wrap || wrap.dataset.urlaubGanttClick === "1") return;
+  wrap.dataset.urlaubGanttClick = "1";
+  wrap.addEventListener("click", (ev) => {
+    if (!state) return;
+    const view = /** @type {HTMLElement | null} */ ($("#view-urlaub"));
+    if (!view?.classList.contains("view--active")) return;
+    const t = ev.target instanceof Element ? ev.target : null;
+    const track = t?.closest(".urlaub-plan__track[data-urlaub-emp]");
+    if (!(track instanceof HTMLElement)) return;
+    if (t?.closest(".urlaub-bar")) return;
+    const empId = Number(track.dataset.urlaubEmp);
+    const days = Number(track.dataset.urlaubDays);
+    const y = Number(track.dataset.urlaubY);
+    const m0 = Number(track.dataset.urlaubM0);
+    if (!Number.isFinite(empId) || !Number.isFinite(days) || !Number.isFinite(y) || !Number.isFinite(m0)) return;
+    const rect = track.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const rw = Math.max(rect.width, 1);
+    const col = Math.min(days, Math.max(1, Math.floor((x / rw) * days) + 1));
+    const iso = isoFromYearMonthDay(y, m0, col);
+    openUrlaubGanttBlockModal(empId, iso, iso);
+  });
+
+  const form = /** @type {HTMLFormElement | null} */ ($("#urlaub-gantt-block-form"));
+  const cancel = /** @type {HTMLButtonElement | null} */ ($("#urlaub-gantt-block-cancel"));
+  const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
+  if (!form || form.dataset.bound === "1") return;
+  form.dataset.bound = "1";
+  cancel?.addEventListener("click", closeUrlaubGanttBlockModal);
+  bd?.addEventListener("click", (e) => {
+    if (e.target === bd) closeUrlaubGanttBlockModal();
+  });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const idRaw = /** @type {HTMLInputElement} */ ($("#urlaub-gantt-block-emp-id")).value;
+    const empId = Number(idRaw);
+    const vAb = readOptionalISODateFromInput("#urlaub-gantt-block-von");
+    const vBisRaw = readOptionalISODateFromInput("#urlaub-gantt-block-bis");
+    if (!vAb) {
+      await openModal("Datum", "<div>Bitte „Von“ setzen.</div>", { variant: "info", confirmText: "Verstanden" });
+      return;
+    }
+    const vBis = vBisRaw && vBisRaw !== "" ? vBisRaw : null;
+    if (vBis && vBis < vAb) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Bis“ darf nicht vor „Von“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    const idx = state.employees.findIndex((e) => Number(e.ID) === empId);
+    if (idx < 0) return;
+    const emp = state.employees[idx];
+    const period = /** @type {Urlaubsperiode} */ ({ von: vAb, bis: vBis });
+    const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+    const dup = normalized.some((p) => p.von === period.von && (p.bis ?? null) === (period.bis ?? null));
+    if (dup) {
+      await openModal(
+        "Hinweis",
+        "<div>Dieser Zeitraum ist bereits als weiterer Urlaub eingetragen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    recordUndoSnapshot();
+    normalized.push(period);
+    emp.Urlaub_perioden = normalized;
+    syncLegacyAbsenceFields(emp);
+    state.employees[idx] = emp;
+    await syncEmployeesThenPersist();
+    closeUrlaubGanttBlockModal();
+    renderUrlaubPlan();
+    renderPersonnelView();
+    renderDashboard();
+    if ($("#view-projects").classList.contains("view--active")) {
+      renderProjectsView();
+    }
+  });
 }
 
 /** @param {unknown} c */
@@ -3341,6 +3449,7 @@ function boot() {
   setupProjectsInteractions();
   setupPersonnelInteractions();
   setupUrlaubView();
+  setupUrlaubGanttBlockModal();
   setupPersonnelTableActions();
   setupQuickReturnDateButtons();
   setupDndAssignModal();
