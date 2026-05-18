@@ -1787,11 +1787,24 @@ function preferDashboardTouchDrag() {
   return false;
 }
 
+/**
+ * HTML5-Drag (Maus) nur abschalten, wenn wir wirklich den Touch-/Stift-Zug nutzen.
+ * Sonst: Touch-Pfad (draggable=false) + pointerdown ignoriert Maus → Ziehen mit Maus unmöglich (Hybrid-PC).
+ */
+function dashboardEmployeesUseNativeDrag() {
+  try {
+    if (window.matchMedia("(pointer: fine)").matches) return true;
+  } catch {
+    /* ignore */
+  }
+  return !preferDashboardTouchDrag();
+}
+
 /** Nach jedem Neuaufbau: Touch-Geräte ohne natives HTML5-Ziehen auf den Chips. */
 function applyDashboardDragMode(root) {
-  const touch = preferDashboardTouchDrag();
+  const native = dashboardEmployeesUseNativeDrag();
   root.querySelectorAll("[data-dashboard-employee]").forEach((el) => {
-    if (el instanceof HTMLElement) el.draggable = !touch;
+    if (el instanceof HTMLElement) el.draggable = native;
   });
 }
 
