@@ -1257,14 +1257,31 @@ textarea {
   grid-template-columns: repeat(var(--urlaub-d, 28), minmax(20px, 1fr));
 }
 
-.urlaub-plan--daylines {
-  --_day-line: rgba(148, 163, 184, 0.55);
-  background-image: repeating-linear-gradient(
+/* Kopf: eine senkrechte Linie je Tages-Spalte (Zellenränder, zuverlässig). */
+.urlaub-plan__head-col {
+  text-align: center;
+  padding: 0.3rem 0.1rem;
+  font-size: 0.68rem;
+  border-right: 1px solid rgba(100, 116, 139, 0.65);
+}
+
+.urlaub-plan__head-col:first-child {
+  border-left: 1px solid rgba(100, 116, 139, 0.65);
+}
+
+/* Track: Linien an jedem Spaltenanfang (Kachel 100%/d) + rechter Außenrand. */
+.urlaub-plan__track.urlaub-plan--daylines {
+  --_day-line: rgba(100, 116, 139, 0.65);
+  border-right: 1px solid var(--_day-line);
+  box-sizing: border-box;
+  background-repeat: repeat;
+  background-size: calc(100% / var(--urlaub-d, 28)) 100%;
+  background-image: linear-gradient(
     to right,
-    transparent,
-    transparent calc(100% / var(--urlaub-d) - 0.5px),
-    var(--_day-line) calc(100% / var(--urlaub-d) - 0.5px),
-    var(--_day-line) calc(100% / var(--urlaub-d))
+    var(--_day-line) 0,
+    var(--_day-line) 1px,
+    transparent 1px,
+    transparent 100%
   );
 }
 
@@ -1277,13 +1294,6 @@ textarea {
   gap: 2px 0;
   padding: 0.25rem 0;
   align-items: center;
-}
-
-.urlaub-plan__head-col {
-  text-align: center;
-  padding: 0.3rem 0.1rem;
-  font-size: 0.68rem;
-  border-left: 1px solid rgba(148, 163, 184, 0.35);
 }
 
 .urlaub-plan__head-col--we {

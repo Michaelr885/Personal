@@ -943,7 +943,7 @@ function renderUrlaubPlan() {
   root.innerHTML = `<div class="urlaub-plan" style="--urlaub-days:${days}">
     <div class="urlaub-plan__head-row">
       <div class="urlaub-plan__corner">Mitarbeitende/r</div>
-      <div class="urlaub-plan__head-days urlaub-plan--daylines" style="--urlaub-d:${days}">${headCells.join("")}</div>
+      <div class="urlaub-plan__head-days" style="--urlaub-d:${days}">${headCells.join("")}</div>
     </div>
     ${
       rows.length
