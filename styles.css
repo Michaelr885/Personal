@@ -309,8 +309,18 @@ code {
   background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
 }
 
-.card-team.team-drop-zone--active {
-  background: linear-gradient(180deg, var(--primary-soft) 0%, var(--surface) 40%);
+.card-team.team-drop-zone {
+  min-height: 140px;
+}
+
+.card-team li[draggable="true"],
+.dashboard-emp-chip[draggable="true"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dashboard-emp-dragging {
+  opacity: 0.45;
 }
 
 .card-team li[draggable="true"] {
@@ -470,6 +480,14 @@ code {
 }
 
 .warn-cert {
+  color: var(--warning);
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.warn-abs {
   color: var(--warning);
   font-size: 0.75rem;
   display: inline-flex;
@@ -857,6 +875,17 @@ textarea {
 
 .data-table tbody tr:hover {
   background: #f8fafc;
+}
+
+.tl-color-dot {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  background: var(--tl-dot, var(--team-fallback));
 }
 
 .actions-cell {

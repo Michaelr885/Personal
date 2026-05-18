@@ -41,7 +41,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["Höhenarbeit", "Kran"],
         Teamleiter_ID: 1,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, 14),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: addDays(t, 2),
+        Abwesenheit_geplant_bis: addDays(t, 6),
       },
       {
         ID: 102,
@@ -52,7 +54,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["MAG", "WIG"],
         Teamleiter_ID: 1,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, 120),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: null,
+        Abwesenheit_geplant_bis: null,
       },
       {
         ID: 103,
@@ -63,7 +67,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["Schalung"],
         Teamleiter_ID: 2,
         Status: "Krank",
-        Zertifikat_Gültig_Bis: addDays(t, 45),
+        Rückkehr_erwartet_am: addDays(t, 3),
+        Abwesenheit_geplant_ab: null,
+        Abwesenheit_geplant_bis: null,
       },
       {
         ID: 104,
@@ -74,7 +80,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["SiGeKo"],
         Teamleiter_ID: 2,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, 8),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: addDays(t, 4),
+        Abwesenheit_geplant_bis: addDays(t, 12),
       },
       {
         ID: 105,
@@ -85,7 +93,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["Stahl"],
         Teamleiter_ID: 2,
         Status: "Urlaub",
-        Zertifikat_Gültig_Bis: addDays(t, 200),
+        Rückkehr_erwartet_am: addDays(t, 8),
+        Abwesenheit_geplant_ab: null,
+        Abwesenheit_geplant_bis: null,
       },
       {
         ID: 106,
@@ -96,7 +106,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["Führerschein CE"],
         Teamleiter_ID: 3,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, 25),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: null,
+        Abwesenheit_geplant_bis: null,
       },
       {
         ID: 107,
@@ -107,7 +119,9 @@ export function createMockDataset() {
         Zusatz_Tags: ["MSR"],
         Teamleiter_ID: 3,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, 90),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: addDays(t, 1),
+        Abwesenheit_geplant_bis: addDays(t, 10),
       },
       {
         ID: 108,
@@ -118,7 +132,9 @@ export function createMockDataset() {
         Zusatz_Tags: [],
         Teamleiter_ID: 3,
         Status: "Verfügbar",
-        Zertifikat_Gültig_Bis: addDays(t, -5),
+        Rückkehr_erwartet_am: null,
+        Abwesenheit_geplant_ab: null,
+        Abwesenheit_geplant_bis: null,
       },
     ],
     projects: [
@@ -201,6 +217,14 @@ function normalizeDataset(raw) {
     projects.length === 0 &&
     assignments.length === 0;
   if (empty) return null;
+  for (const row of employees) {
+    if (!row || typeof row !== "object") continue;
+    const e = /** @type {Record<string, unknown>} */ (row);
+    delete e.Zertifikat_Gültig_Bis;
+    if (e.Rückkehr_erwartet_am === undefined) e.Rückkehr_erwartet_am = null;
+    if (e.Abwesenheit_geplant_ab === undefined) e.Abwesenheit_geplant_ab = null;
+    if (e.Abwesenheit_geplant_bis === undefined) e.Abwesenheit_geplant_bis = null;
+  }
   return { team_leaders, employees, projects, assignments };
 }
 

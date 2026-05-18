@@ -5,7 +5,7 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number, Status:string, Zertifikat_Gültig_Bis:string }} Employee */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -117,20 +117,93 @@ function employeeActiveOnProjectToday(empId) {
   );
 }
 
-function certificateWarningDays(certDateStr) {
-  const end = parseISODate(certDateStr);
+/** Kalendertage bis zum Zieldatum (heute → Ziel); negativ = Datum liegt in der Vergangenheit. */
+function daysUntilISODate(isoStr) {
+  if (isoStr == null || isoStr === "") return null;
+  const end = parseISODate(String(isoStr));
+  if (Number.isNaN(end.getTime())) return null;
   const start = parseISODate(todayISO());
-  const diffMs = end - start;
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
-function addDaysISO(isoDate, days) {
-  const d = new Date(`${isoDate}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+/** Krank/Urlaub: Rückkehr-Hinweis fürs Dashboard (HTML). */
+function absenceReturnBadgeHtml(emp) {
+  if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
+  const raw = emp.Rückkehr_erwartet_am;
+  if (raw == null || raw === "") {
+    return `<span class="tag-mini" title="Rückkehrdatum in der Personalverwaltung eintragen">kein Rückkehrdatum</span>`;
+  }
+  const d = daysUntilISODate(raw);
+  if (d === null || !Number.isFinite(d)) return "";
+  if (d < 0) {
+    return `<span class="warn-abs" title="Erwartete Rückkehr war ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr überfällig</span>`;
+  }
+  if (d === 0) {
+    return `<span class="warn-abs" title="Rückkehr heute"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute</span>`;
+  }
+  const urgent = d < 30;
+  const cls = urgent ? "warn-abs" : "tag-mini";
+  const icon = urgent ? "fa-triangle-exclamation" : "fa-calendar-check";
+  return `<span class="${cls}" title="Erwartete Rückkehr ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+}
+
+/** Verfügbar: ab 5 Tage vor geplantem Abwesenheitsbeginn Hinweis (HTML). */
+function plannedAbsenceBadgeHtml(emp) {
+  if (emp.Status !== "Verfügbar") return "";
+  const von = emp.Abwesenheit_geplant_ab;
+  if (von == null || von === "") return "";
+  const d = daysUntilISODate(von);
+  if (d === null || !Number.isFinite(d)) return "";
+  if (d < 0) return "";
+  if (d > 5) return "";
+  const bis = emp.Abwesenheit_geplant_bis;
+  const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
+  return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+}
+
+/** Fließtext für Personal-Tabelle (ohne HTML). */
+function absenceSummaryPlain(emp) {
+  const parts = [];
+  if (emp.Status === "Krank" || emp.Status === "Urlaub") {
+    const raw = emp.Rückkehr_erwartet_am;
+    if (raw == null || raw === "") parts.push("Rückkehr: —");
+    else {
+      const d = daysUntilISODate(raw);
+      if (d === null || !Number.isFinite(d)) parts.push(`Rückkehr: ${raw}`);
+      else if (d < 0) parts.push(`Rückkehr überfällig (${raw})`);
+      else if (d === 0) parts.push("Rückkehr heute");
+      else parts.push(`Rückkehr in ${d} Tagen (${raw})`);
+    }
+  }
+  if (emp.Status === "Verfügbar") {
+    const von = emp.Abwesenheit_geplant_ab;
+    if (von) {
+      const d = daysUntilISODate(von);
+      if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) {
+        parts.push(`Abwesenheit ab ${von} in ${d} T.`);
+      } else if (d !== null && Number.isFinite(d) && d > 5) {
+        parts.push(`Geplant ab ${von}`);
+      }
+    }
+  }
+  return parts.length ? parts.join(" · ") : "—";
+}
+
+/** Eine Zeile für den Ressourcen-Pool unter der Person. */
+function plannedAbsencePoolLine(emp) {
+  if (emp.Status !== "Verfügbar") return "";
+  const von = emp.Abwesenheit_geplant_ab;
+  if (von == null || von === "") return "";
+  const d = daysUntilISODate(von);
+  if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
+  return `Abwesenheit ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`;
+}
+
+function readOptionalISODateFromInput(id) {
+  const el = /** @type {HTMLInputElement | null} */ ($(id));
+  if (!el) return null;
+  const v = el.value.trim();
+  return v === "" ? null : v;
 }
 
 function escapeHtml(str) {
@@ -139,6 +212,13 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** @param {unknown} c */
+function sanitizeTeamColor(c) {
+  const s = typeof c === "string" ? c.trim() : "";
+  if (/^#[0-9A-Fa-f]{6}$/.test(s)) return s;
+  return "#64748b";
 }
 
 /**
@@ -298,7 +378,7 @@ function renderDashboard() {
   const unassigned = employeesWithoutTeamLeader();
   const unassignedChips =
     unassigned.length === 0
-      ? '<p class="hint">Alle Mitarbeitenden sind einer Teamleitung zugeordnet.</p>'
+      ? '<p class="hint">Alle Mitarbeitenden haben eine gültige Teamleitung oder sind ohne Teamleitung erfasst.</p>'
       : `<div class="dashboard-chip-row" aria-label="Ohne Teamleitung">${unassigned
           .map(
             (e) => `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
@@ -322,21 +402,15 @@ function renderDashboard() {
       ).length;
       const items = members
         .map((m) => {
-          const certDays = certificateWarningDays(m.Zertifikat_Gültig_Bis);
-          const certWarn =
-            certDays < 30 && certDays >= 0
-              ? `<span class="warn-cert" title="Zertifikat läuft bald ab"><i class="fa-solid fa-triangle-exclamation"></i> ${certDays} Tage</span>`
-              : certDays < 0
-                ? `<span class="warn-cert"><i class="fa-solid fa-circle-xmark"></i> abgelaufen</span>`
-                : "";
+          const absenceBadges = `${absenceReturnBadgeHtml(m)} ${plannedAbsenceBadgeHtml(m)}`.trim();
           const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Zu anderer Teamleitung oder in „Ohne Teamleitung“ ziehen">
+          return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Auf andere Teamkarte oder „Ohne Teamleitung“ ziehen">
             <span>${m.Vorname} ${m.Nachname} <span class="tag-mini">${m.Qualifikation}</span></span>
             <span>${
               onProject
                 ? '<span class="badge">im Projekt</span>'
                 : '<span class="badge badge--muted">frei</span>'
-            } ${certWarn}</span>
+            } ${absenceBadges}</span>
           </li>`;
         })
         .join("");
@@ -345,7 +419,7 @@ function renderDashboard() {
           <strong>${escapeHtml(tl.Name)}</strong>
           <span class="badge">${assignedCount} heute im Projekt</span>
         </div>
-        <div class="hint">Person hierher ziehen, um sie dieser Teamleitung zuzuordnen. Aus der Liste auf „Ohne Teamleitung“ ziehen, um die Zuordnung zu entfernen.</div>
+        <div class="hint">Person aus dieser oder einer anderen Teamliste hierher ziehen, um die Teamleitung zu setzen. Auf eine <strong>andere Teamkarte</strong> ziehen, um das Team zu wechseln. Auf „Ohne Teamleitung“ oben ziehen, um die Zuordnung zu entfernen.</div>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
     })
@@ -356,13 +430,14 @@ function renderDashboard() {
     absences.length === 0
       ? '<p class="hint">Keine Abwesenheiten erfasst.</p>'
       : `<ul class="absence-list">${absences
-          .map((e) => {
-            const pill =
-              e.Status === "Krank"
-                ? '<span class="pill pill--krank">Krank</span>'
-                : '<span class="pill pill--urlaub">Urlaub</span>';
-            return `<li><span>${e.Vorname} ${e.Nachname}</span>${pill}</li>`;
-          })
+      .map((e) => {
+        const pill =
+          e.Status === "Krank"
+            ? '<span class="pill pill--krank">Krank</span>'
+            : '<span class="pill pill--urlaub">Urlaub</span>';
+        const ret = absenceReturnBadgeHtml(e);
+        return `<li><span>${e.Vorname} ${e.Nachname} ${pill}<br>${ret || '<span class="hint">Rückkehrdatum nicht gesetzt</span>'}</span></li>`;
+      })
           .join("")}</ul>`;
 
   const available = state.employees.filter((e) => e.Status === "Verfügbar");
@@ -384,8 +459,9 @@ function renderDashboard() {
         <span class="badge badge--muted">${unassigned.length} Person(en)</span>
       </div>
       <p class="hint">
-        Diese Mitarbeitenden haben keine gültige Teamleiter-Zuordnung. Ziehen Sie sie auf eine
-        Teamkarte unten – oder weisen Sie die Teamleitung in der Personalverwaltung zu.
+        Teamleitung ist freiwillig: hier erscheinen Personen ohne Teamleitung oder mit ungültiger
+        Teamleiter-Referenz. Ziehen Sie sie auf eine Teamkarte – oder weisen Sie die Teamleitung in
+        der Personalverwaltung zu.
       </p>
       ${unassignedChips}
     </div>
@@ -587,13 +663,20 @@ function renderEmployeePool() {
   $("#employees-hint").textContent = `${emps.length} Person(en) im Pool (nur Status „Verfügbar“).`;
   list.innerHTML = emps
     .map(
-      (e) => `<div class="employee-card" draggable="true" data-id="${e.ID}">
+      (e) => {
+        const planLine = plannedAbsencePoolLine(e);
+        const planHtml = planLine
+          ? `<div class="hint" style="margin-top:0.2rem">${escapeHtml(planLine)}</div>`
+          : "";
+        return `<div class="employee-card" draggable="true" data-id="${e.ID}">
       <div>
         <div class="name">${e.Vorname} ${e.Nachname}</div>
         <div class="hint">${e.Qualifikation} · ${e.Personalnummer}</div>
+        ${planHtml}
       </div>
       <i class="fa-solid fa-grip-lines-vertical" aria-hidden="true"></i>
-    </div>`
+    </div>`;
+      }
     )
     .join("");
 }
@@ -820,6 +903,61 @@ function statusCellClass(status) {
   return "status-cell";
 }
 
+function renderTeamLeadersTable() {
+  if (!state) return;
+  const tbody = /** @type {HTMLElement} */ ($("#teamleaders-tbody"));
+  const rows = state.team_leaders
+    .map((tl) => {
+      const count = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID)).length;
+      const col = sanitizeTeamColor(tl.Team_Farbe);
+      return `<tr>
+        <td>${escapeHtml(tl.Name)}</td>
+        <td>
+          <span class="tl-color-dot" style="--tl-dot:${col}" title="${escapeHtml(col)}"></span>
+          <code>${escapeHtml(col)}</code>
+        </td>
+        <td>${count}</td>
+        <td class="actions-cell">
+          <button type="button" class="btn btn--icon btn--delete-icon" data-delete-tl="${tl.ID}" title="Teamleiter/in löschen" aria-label="Teamleiter/in löschen"><i class="fa-solid fa-trash-can"></i></button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  tbody.innerHTML =
+    rows ||
+    '<tr><td colspan="4" class="hint">Noch keine Teamleitenden. Legen Sie unten eine Person an.</td></tr>';
+
+  tbody.querySelectorAll("[data-delete-tl]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(/** @type {HTMLElement} */ (btn).dataset.deleteTl);
+      if (!state || !Number.isFinite(id)) return;
+      const tl = getTeamLeader(id);
+      if (!tl) return;
+      const count = state.employees.filter((e) => Number(e.Teamleiter_ID) === id).length;
+      const ok = await openModal(
+        "Teamleiter/in löschen",
+        `<div>${
+          count > 0
+            ? `${count} Mitarbeitende werden auf „Keine Teamleitung“ gesetzt. `
+            : ""
+        }Der Eintrag wird dauerhaft entfernt.</div>`,
+        { confirmText: "Ja, löschen", confirmDanger: true }
+      );
+      if (!ok) return;
+      for (const e of state.employees) {
+        if (Number(e.Teamleiter_ID) === id) e.Teamleiter_ID = null;
+      }
+      state.team_leaders = state.team_leaders.filter((t) => Number(t.ID) !== id);
+      await persist();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+    });
+  });
+}
+
 function renderPersonnelTable() {
   if (!state) return;
   const tbody = /** @type {HTMLElement} */ ($("#personnel-tbody"));
@@ -842,9 +980,9 @@ function renderPersonnelTable() {
         <td>${e.Personalnummer}</td>
         <td>${e.Vorname} ${e.Nachname}</td>
         <td>${e.Qualifikation}</td>
-        <td>${tl ? tl.Name : "—"}</td>
+        <td>${tl ? escapeHtml(tl.Name) : "Keine"}</td>
         <td class="${sc}">${e.Status}</td>
-        <td>${e.Zertifikat_Gültig_Bis}</td>
+        <td class="hint">${escapeHtml(absenceSummaryPlain(e))}</td>
         <td class="actions-cell">
           <button type="button" class="btn btn--icon btn--ghost" data-edit="${e.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
           <button type="button" class="btn btn--icon btn--delete-icon" data-delete="${e.ID}" title="Löschen" aria-label="Löschen"><i class="fa-solid fa-trash-can"></i></button>
@@ -853,7 +991,7 @@ function renderPersonnelTable() {
     })
     .join("");
   tbody.innerHTML =
-    rows || '<tr><td colspan="8" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+    rows || '<tr><td colspan="7" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
 
   tbody.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => loadEmployeeIntoForm(Number(/** @type {HTMLElement} */ (btn).dataset.edit)));
@@ -895,7 +1033,9 @@ function loadEmployeeIntoForm(id) {
       ? String(e.Teamleiter_ID)
       : "";
   /** @type {HTMLSelectElement} */ ($("#emp-status")).value = e.Status;
-  /** @type {HTMLInputElement} */ ($("#emp-cert")).value = e.Zertifikat_Gültig_Bis;
+  /** @type {HTMLInputElement} */ ($("#emp-rueck")).value = e.Rückkehr_erwartet_am ?? "";
+  /** @type {HTMLInputElement} */ ($("#emp-plan-ab")).value = e.Abwesenheit_geplant_ab ?? "";
+  /** @type {HTMLInputElement} */ ($("#emp-plan-bis")).value = e.Abwesenheit_geplant_bis ?? "";
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
 }
@@ -913,9 +1053,11 @@ function fillNewEmployeeSelects() {
     .map((q) => `<option value="${q}">${q}</option>`)
     .join("");
   if (!state) return;
-  /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML = state.team_leaders
-    .map((t) => `<option value="${t.ID}">${t.Name}</option>`)
-    .join("");
+  /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).innerHTML =
+    '<option value="">Keine Teamleitung</option>' +
+    state.team_leaders
+      .map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`)
+      .join("");
 }
 
 function fillQualificationSelects() {
@@ -932,12 +1074,13 @@ function fillTeamLeaderSelect() {
   const sel = /** @type {HTMLSelectElement} */ ($("#emp-tl"));
   sel.innerHTML =
     '<option value="">Keine Teamleitung</option>' +
-    state.team_leaders.map((t) => `<option value="${t.ID}">${t.Name}</option>`).join("");
+    state.team_leaders.map((t) => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`).join("");
 }
 
 function renderPersonnelView() {
   fillQualificationSelects();
   fillTeamLeaderSelect();
+  renderTeamLeadersTable();
   renderPersonnelTable();
 }
 
@@ -965,6 +1108,16 @@ function setupPersonnelInteractions() {
       .map((s) => s.trim())
       .filter(Boolean);
     const tlRaw = /** @type {HTMLSelectElement} */ ($("#emp-tl")).value;
+    const planAb = readOptionalISODateFromInput("#emp-plan-ab");
+    const planBis = readOptionalISODateFromInput("#emp-plan-bis");
+    if (planAb && planBis && planBis < planAb) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const payload = {
       Personalnummer: /** @type {HTMLInputElement} */ ($("#emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#emp-vorname")).value.trim(),
@@ -973,7 +1126,9 @@ function setupPersonnelInteractions() {
       Zusatz_Tags: tags,
       Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
-      Zertifikat_Gültig_Bis: /** @type {HTMLInputElement} */ ($("#emp-cert")).value,
+      Rückkehr_erwartet_am: readOptionalISODateFromInput("#emp-rueck"),
+      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#emp-plan-ab"),
+      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#emp-plan-bis"),
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
     if (idx >= 0) {
@@ -991,21 +1146,57 @@ function setupPersonnelInteractions() {
   $("#new-employee-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!state) return;
+    const planAbNew = readOptionalISODateFromInput("#new-emp-plan-ab");
+    const planBisNew = readOptionalISODateFromInput("#new-emp-plan-bis");
+    if (planAbNew && planBisNew && planBisNew < planAbNew) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const newEmp = {
       ID: nextId(state.employees),
       Personalnummer: /** @type {HTMLInputElement} */ ($("#new-emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#new-emp-vorname")).value.trim(),
       Nachname: /** @type {HTMLInputElement} */ ($("#new-emp-nachname")).value.trim(),
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).value,
-      Teamleiter_ID: Number(/** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value),
+      Teamleiter_ID: (() => {
+        const raw = /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value;
+        return raw === "" ? null : Number(raw);
+      })(),
       Status: /** @type {HTMLSelectElement} */ ($("#new-emp-status")).value,
       Zusatz_Tags: [],
-      Zertifikat_Gültig_Bis: addDaysISO(todayISO(), 365),
+      Rückkehr_erwartet_am: readOptionalISODateFromInput("#new-emp-rueck"),
+      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#new-emp-plan-ab"),
+      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#new-emp-plan-bis"),
     };
     state.employees.push(newEmp);
     await persist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
     fillNewEmployeeSelects();
+    renderPersonnelView();
+    renderDashboard();
+    if ($("#view-projects").classList.contains("view--active")) {
+      renderProjectsView();
+    }
+  });
+
+  $("#new-teamleader-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const name = /** @type {HTMLInputElement} */ ($("#new-tl-name")).value.trim();
+    if (!name) return;
+    const colorIn = /** @type {HTMLInputElement} */ ($("#new-tl-color")).value;
+    state.team_leaders.push({
+      ID: nextId(state.team_leaders),
+      Name: name,
+      Team_Farbe: sanitizeTeamColor(colorIn),
+    });
+    await persist();
+    /** @type {HTMLFormElement} */ ($("#new-teamleader-form")).reset();
+    /** @type {HTMLInputElement} */ ($("#new-tl-color")).value = "#64748b";
     renderPersonnelView();
     renderDashboard();
     if ($("#view-projects").classList.contains("view--active")) {
@@ -1067,14 +1258,34 @@ function setupDashboardDnD() {
   view.dataset.dashboardDnd = "1";
 
   view.addEventListener("dragstart", (ev) => {
-    const el = ev.target instanceof Element ? ev.target : null;
-    const row = /** @type {HTMLElement | null} */ (el?.closest("[data-dashboard-employee]"));
+    const path = ev.composedPath();
+    let row = /** @type {HTMLElement | null} */ (null);
+    for (const n of path) {
+      if (n instanceof Element && n.hasAttribute("data-dashboard-employee")) {
+        row = /** @type {HTMLElement} */ (n);
+        break;
+      }
+    }
     if (!row) return;
     const id = row.getAttribute("data-dashboard-employee");
     if (!id) return;
+    row.classList.add("dashboard-emp-dragging");
     ev.dataTransfer.setData("text/plain", id);
     ev.dataTransfer.setData("application/x-employee-id", id);
     ev.dataTransfer.effectAllowed = "move";
+  });
+
+  view.addEventListener("dragend", () => {
+    view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
+  });
+
+  view.addEventListener("dragenter", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : null;
+    const zone = /** @type {HTMLElement | null} */ (
+      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+    );
+    if (!zone) return;
+    ev.preventDefault();
   });
 
   view.addEventListener("dragover", (ev) => {

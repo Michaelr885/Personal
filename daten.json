@@ -1,9 +1,25 @@
 {
   "team_leaders": [
-    { "ID": 1, "Name": "Anna Schmidt", "Team_Farbe": "#2563eb" },
-    { "ID": 2, "Name": "Markus Weber", "Team_Farbe": "#059669" },
-    { "ID": 3, "Name": "Laura Chen", "Team_Farbe": "#d97706" },
-    { "ID": 4, "Name": "Thomas Bergmann", "Team_Farbe": "#7c3aed" }
+    {
+      "ID": 1,
+      "Name": "Anna Schmidt",
+      "Team_Farbe": "#2563eb"
+    },
+    {
+      "ID": 2,
+      "Name": "Markus Weber",
+      "Team_Farbe": "#059669"
+    },
+    {
+      "ID": 3,
+      "Name": "Laura Chen",
+      "Team_Farbe": "#d97706"
+    },
+    {
+      "ID": 4,
+      "Name": "Thomas Bergmann",
+      "Team_Farbe": "#7c3aed"
+    }
   ],
   "employees": [
     {
@@ -12,10 +28,15 @@
       "Vorname": "Felix",
       "Nachname": "Brandt",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Höhenarbeit", "Kran"],
+      "Zusatz_Tags": [
+        "Höhenarbeit",
+        "Kran"
+      ],
       "Teamleiter_ID": 1,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-11-30"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": "2026-05-20",
+      "Abwesenheit_geplant_bis": "2026-05-25"
     },
     {
       "ID": 102,
@@ -23,10 +44,15 @@
       "Vorname": "Nina",
       "Nachname": "Krause",
       "Qualifikation": "Schweißer",
-      "Zusatz_Tags": ["MAG", "WIG"],
+      "Zusatz_Tags": [
+        "MAG",
+        "WIG"
+      ],
       "Teamleiter_ID": 1,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-02-14"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 103,
@@ -34,10 +60,14 @@
       "Vorname": "David",
       "Nachname": "Sommer",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Schalung"],
+      "Zusatz_Tags": [
+        "Schalung"
+      ],
       "Teamleiter_ID": 1,
       "Status": "Krank",
-      "Zertifikat_Gültig_Bis": "2026-09-01"
+      "Rückkehr_erwartet_am": "2026-05-21",
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 104,
@@ -45,10 +75,14 @@
       "Vorname": "Julia",
       "Nachname": "Pohl",
       "Qualifikation": "Bauleiter",
-      "Zusatz_Tags": ["SiGeKo"],
+      "Zusatz_Tags": [
+        "SiGeKo"
+      ],
       "Teamleiter_ID": 1,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-07-20"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": "2026-05-22",
+      "Abwesenheit_geplant_bis": "2026-05-29"
     },
     {
       "ID": 105,
@@ -56,10 +90,14 @@
       "Vorname": "Henrik",
       "Nachname": "Lorenz",
       "Qualifikation": "Elektriker",
-      "Zusatz_Tags": ["MSR"],
+      "Zusatz_Tags": [
+        "MSR"
+      ],
       "Teamleiter_ID": 1,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-01-10"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 106,
@@ -67,10 +105,14 @@
       "Vorname": "Saskia",
       "Nachname": "Vogel",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Führerschein CE"],
+      "Zusatz_Tags": [
+        "Führerschein CE"
+      ],
       "Teamleiter_ID": 2,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-12-05"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 107,
@@ -78,10 +120,15 @@
       "Vorname": "Marco",
       "Nachname": "Steiner",
       "Qualifikation": "Schweißer",
-      "Zusatz_Tags": ["Stahl", "MAG"],
+      "Zusatz_Tags": [
+        "Stahl",
+        "MAG"
+      ],
       "Teamleiter_ID": 2,
       "Status": "Urlaub",
-      "Zertifikat_Gültig_Bis": "2027-04-18"
+      "Rückkehr_erwartet_am": "2026-05-27",
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 108,
@@ -92,7 +139,9 @@
       "Zusatz_Tags": [],
       "Teamleiter_ID": 2,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-06-15"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 109,
@@ -100,10 +149,14 @@
       "Vorname": "Tim",
       "Nachname": "Kraus",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Kran"],
+      "Zusatz_Tags": [
+        "Kran"
+      ],
       "Teamleiter_ID": 2,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-03-22"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 110,
@@ -111,10 +164,14 @@
       "Vorname": "Amelie",
       "Nachname": "Winter",
       "Qualifikation": "Lagerist",
-      "Zusatz_Tags": ["Stapler"],
+      "Zusatz_Tags": [
+        "Stapler"
+      ],
       "Teamleiter_ID": 2,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-10-01"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 111,
@@ -122,10 +179,15 @@
       "Vorname": "Jan",
       "Nachname": "Neumann",
       "Qualifikation": "Elektriker",
-      "Zusatz_Tags": ["MSR", "SPS"],
+      "Zusatz_Tags": [
+        "MSR",
+        "SPS"
+      ],
       "Teamleiter_ID": 3,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-05-30"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 112,
@@ -133,10 +195,14 @@
       "Vorname": "Carla",
       "Nachname": "Braun",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Höhenarbeit"],
+      "Zusatz_Tags": [
+        "Höhenarbeit"
+      ],
       "Teamleiter_ID": 3,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-08-12"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 113,
@@ -144,10 +210,14 @@
       "Vorname": "Oliver",
       "Nachname": "Schmitt",
       "Qualifikation": "Schweißer",
-      "Zusatz_Tags": ["WIG"],
+      "Zusatz_Tags": [
+        "WIG"
+      ],
       "Teamleiter_ID": 3,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-04-01"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 114,
@@ -155,10 +225,15 @@
       "Vorname": "Franziska",
       "Nachname": "Maier",
       "Qualifikation": "Bauleiter",
-      "Zusatz_Tags": ["SiGeKo", "Brandschutz"],
+      "Zusatz_Tags": [
+        "SiGeKo",
+        "Brandschutz"
+      ],
       "Teamleiter_ID": 3,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-02-28"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 115,
@@ -169,7 +244,9 @@
       "Zusatz_Tags": [],
       "Teamleiter_ID": 3,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-11-01"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 116,
@@ -177,10 +254,15 @@
       "Vorname": "Rico",
       "Nachname": "Albrecht",
       "Qualifikation": "Monteur",
-      "Zusatz_Tags": ["Schalung", "Beton"],
+      "Zusatz_Tags": [
+        "Schalung",
+        "Beton"
+      ],
       "Teamleiter_ID": 4,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-01-25"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 117,
@@ -188,10 +270,14 @@
       "Vorname": "Tessa",
       "Nachname": "Winkler",
       "Qualifikation": "Elektriker",
-      "Zusatz_Tags": ["Photovoltaik"],
+      "Zusatz_Tags": [
+        "Photovoltaik"
+      ],
       "Teamleiter_ID": 4,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-09-30"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 118,
@@ -199,10 +285,14 @@
       "Vorname": "Malik",
       "Nachname": "Öztürk",
       "Qualifikation": "Schweißer",
-      "Zusatz_Tags": ["Stahl"],
+      "Zusatz_Tags": [
+        "Stahl"
+      ],
       "Teamleiter_ID": 4,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2027-06-10"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": "2026-05-19",
+      "Abwesenheit_geplant_bis": "2026-05-28"
     },
     {
       "ID": 119,
@@ -210,10 +300,15 @@
       "Vorname": "Hannah",
       "Nachname": "Richter",
       "Qualifikation": "Lagerist",
-      "Zusatz_Tags": ["Stapler", "ADR"],
+      "Zusatz_Tags": [
+        "Stapler",
+        "ADR"
+      ],
       "Teamleiter_ID": 4,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-12-18"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     },
     {
       "ID": 120,
@@ -221,10 +316,14 @@
       "Vorname": "Steffen",
       "Nachname": "Groß",
       "Qualifikation": "Bauleiter",
-      "Zusatz_Tags": ["SiGeKo"],
+      "Zusatz_Tags": [
+        "SiGeKo"
+      ],
       "Teamleiter_ID": 4,
       "Status": "Verfügbar",
-      "Zertifikat_Gültig_Bis": "2026-05-28"
+      "Rückkehr_erwartet_am": null,
+      "Abwesenheit_geplant_ab": null,
+      "Abwesenheit_geplant_bis": null
     }
   ],
   "projects": [
@@ -233,21 +332,33 @@
       "Name": "Logistikzentrum Erweiterung",
       "Startdatum": "2026-02-01",
       "Enddatum": "2026-10-31",
-      "Benötigte_Qualifikationen": { "Monteur": 6, "Schweißer": 2, "Bauleiter": 1 }
+      "Benötigte_Qualifikationen": {
+        "Monteur": 6,
+        "Schweißer": 2,
+        "Bauleiter": 1
+      }
     },
     {
       "ID": 2,
       "Name": "Windpark Servicegebäude",
       "Startdatum": "2026-04-15",
       "Enddatum": "2027-01-31",
-      "Benötigte_Qualifikationen": { "Monteur": 4, "Elektriker": 3, "Bauleiter": 1 }
+      "Benötigte_Qualifikationen": {
+        "Monteur": 4,
+        "Elektriker": 3,
+        "Bauleiter": 1
+      }
     },
     {
       "ID": 3,
       "Name": "Kläranlage Sanierung",
       "Startdatum": "2026-06-01",
       "Enddatum": "2026-12-15",
-      "Benötigte_Qualifikationen": { "Monteur": 5, "Schweißer": 2, "Lagerist": 1 }
+      "Benötigte_Qualifikationen": {
+        "Monteur": 5,
+        "Schweißer": 2,
+        "Lagerist": 1
+      }
     }
   ],
   "assignments": [
