@@ -600,6 +600,12 @@ code {
   color: var(--status-urlaub);
 }
 
+.pill--geplant {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
 .pill--verfügbar {
   background: var(--status-verfügbar-soft);
   color: var(--status-verfügbar);

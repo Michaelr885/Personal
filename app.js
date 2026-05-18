@@ -636,6 +636,81 @@ function dashboardMemberAbsenceBlock(emp) {
   return `<div class="dashboard-emp-abs">${[ret, plan].filter(Boolean).join(" ")}</div>`;
 }
 
+/** True, wenn heute im inklusiven Zeitraum [ab, bis] liegt. */
+function todayWithinInclusiveISO(ab, bis) {
+  const t = todayISO();
+  const b = bis && bis !== "" ? String(bis) : String(ab);
+  if (ab == null || ab === "") return false;
+  return t >= String(ab) && t <= b;
+}
+
+/** Geplanter Start sichtbar: heute im Zeitraum oder Start in 0…5 Tagen. */
+function plannedWindowVisibleOnDashboard(ab, bis) {
+  if (ab == null || ab === "") return false;
+  if (todayWithinInclusiveISO(ab, bis)) return true;
+  const d = daysUntilISODate(String(ab));
+  return d !== null && Number.isFinite(d) && d >= 0 && d <= 5;
+}
+
+/** Dashboard-Abwesenheitsliste: laufend Krank/Urlaub + relevante Pläne bei „Verfügbar“. */
+function employeeMatchesDashboardAbsencePanel(emp) {
+  if (emp.Status === "Krank" || emp.Status === "Urlaub") return true;
+  if (emp.Status !== "Verfügbar") return false;
+  if (plannedWindowVisibleOnDashboard(emp.Urlaub_ab, emp.Urlaub_bis)) return true;
+  if (plannedWindowVisibleOnDashboard(emp.Krank_ab, emp.Krank_bis)) return true;
+  return plannedWindowVisibleOnDashboard(emp.Abwesenheit_geplant_ab, emp.Abwesenheit_geplant_bis);
+}
+
+/**
+ * Für Status Verfügbar: ein Anzeige-Zeitraum (Deduplizierung per ab|bis).
+ * Priorität: heute im Zeitraum, sonst frühester sichtbarer Start.
+ * @returns {{ kind: string; ab: string; bis: string } | null}
+ */
+function verfügbarDashboardAbsenceDisplayWindow(emp) {
+  const windows = /** @type {{ kind: string; ab: string; bis: string }[]} */ ([]);
+  const seen = new Set();
+  const push = (kind, ab, bis) => {
+    if (ab == null || ab === "") return;
+    const b = bis && bis !== "" ? String(bis) : String(ab);
+    if (!plannedWindowVisibleOnDashboard(ab, bis)) return;
+    const key = `${String(ab)}|${b}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    windows.push({ kind, ab: String(ab), bis: b });
+  };
+  push("Urlaub", emp.Urlaub_ab, emp.Urlaub_bis);
+  push("Krank", emp.Krank_ab, emp.Krank_bis);
+  push("Urlaub", emp.Abwesenheit_geplant_ab, emp.Abwesenheit_geplant_bis);
+  if (!windows.length) return null;
+  const t = todayISO();
+  windows.sort((a, z) => {
+    const aIn = t >= a.ab && t <= a.bis ? 0 : 1;
+    const zIn = t >= z.ab && t <= z.bis ? 0 : 1;
+    if (aIn !== zIn) return aIn - zIn;
+    return a.ab.localeCompare(z.ab);
+  });
+  return windows[0];
+}
+
+/** Rückkehr-Hinweis für geplanten Zeitraum (Status noch Verfügbar). */
+function plannedVerfügbarReturnLineHtml(ab, bis, kind = "Urlaub") {
+  const ret = addCalendarDaysToISO(bis, 1);
+  const icon = kind === "Krank" ? "fa-file-medical" : "fa-umbrella-beach";
+  if (ret == null || ret === "") return '<span class="hint">Ende des Zeitraums nicht lesbar</span>';
+  const d = daysUntilISODate(ret);
+  const de = formatDateDE(ret);
+  if (d === null || !Number.isFinite(d)) {
+    return `<span class="tag-mini"><i class="fa-solid fa-calendar-check"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong></span>`;
+  }
+  if (d < 0) {
+    return `<span class="warn-abs"><i class="fa-solid fa-circle-xmark"></i> Geplanter Arbeitstag <strong>${escapeHtml(de)}</strong> liegt in der Vergangenheit</span>`;
+  }
+  if (d === 0) {
+    return `<span class="warn-abs"><i class="fa-solid fa-triangle-exclamation"></i> Geplant: erster Arbeitstag heute · <strong>${escapeHtml(de)}</strong></span>`;
+  }
+  return `<span class="warn-abs"><i class="fa-solid ${icon}"></i> Geplant: erster Arbeitstag <strong>${escapeHtml(de)}</strong> · noch ${d} Tag${d === 1 ? "" : "e"}</span>`;
+}
+
 /** Krank/Urlaub: Abwesenheitszeitraum für die Dashboard-Abwesenheitsliste. */
 function activeAbsencePeriodHtml(emp) {
   if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
@@ -709,19 +784,27 @@ function renderDashboard() {
     })
     .join("");
 
-  const absences = state.employees.filter((e) => e.Status === "Krank" || e.Status === "Urlaub");
+  const absences = state.employees.filter(employeeMatchesDashboardAbsencePanel);
+  absences.sort((a, b) => {
+    const rank = (e) => (e.Status === "Krank" || e.Status === "Urlaub" ? 0 : 1);
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return `${a.Nachname} ${a.Vorname}`.localeCompare(`${b.Nachname} ${b.Vorname}`, "de");
+  });
   const absenceHtml =
     absences.length === 0
       ? '<p class="hint">Keine Abwesenheiten erfasst.</p>'
       : `<ul class="absence-list">${absences
       .map((e) => {
-        const pill =
-          e.Status === "Krank"
-            ? '<span class="pill pill--krank">Krank</span>'
-            : '<span class="pill pill--urlaub">Urlaub</span>';
-        const period = activeAbsencePeriodHtml(e);
-        const ret = absenceReturnBadgeHtml(e);
-        return `<li class="absence-list__item">
+        if (e.Status === "Krank" || e.Status === "Urlaub") {
+          const pill =
+            e.Status === "Krank"
+              ? '<span class="pill pill--krank">Krank</span>'
+              : '<span class="pill pill--urlaub">Urlaub</span>';
+          const period = activeAbsencePeriodHtml(e);
+          const ret = absenceReturnBadgeHtml(e);
+          return `<li class="absence-list__item">
           <div class="absence-list__head">
             <strong>${escapeHtml(`${e.Vorname} ${e.Nachname}`)}</strong> ${pill}
           </div>
@@ -730,7 +813,38 @@ function renderDashboard() {
             <div class="absence-list__line absence-list__line--return">${ret || '<span class="hint">Zeitraum-Ende (bis) nicht gesetzt</span>'}</div>
           </div>
         </li>`;
+        }
+        const win = verfügbarDashboardAbsenceDisplayWindow(e);
+        if (!win) return "";
+        const pillKind =
+          win.kind === "Krank"
+            ? '<span class="pill pill--krank">Krank geplant</span>'
+            : '<span class="pill pill--urlaub">Urlaub geplant</span>';
+        const dem = '<span class="pill pill--geplant">Demnächst</span>';
+        const period = `<span class="absence-list__period">Geplant abwesend <strong>${escapeHtml(formatDateDE(win.ab))}</strong> – <strong>${escapeHtml(formatDateDE(win.bis))}</strong> <span class="hint">(Status noch „Verfügbar“)</span></span>`;
+        const t = todayISO();
+        let preLine = "";
+        if (t < win.ab) {
+          const ds = daysUntilISODate(win.ab);
+          if (ds !== null && Number.isFinite(ds) && ds >= 0) {
+            preLine = `<div class="absence-list__line"><span class="hint">Beginn in ${ds} Tag${ds === 1 ? "" : "en"}</span></div>`;
+          }
+        } else if (t >= win.ab && t <= win.bis) {
+          preLine = `<div class="absence-list__line"><span class="hint">Laut Plan heute abwesend – Status ggf. auf „${escapeHtml(win.kind)}“ setzen</span></div>`;
+        }
+        const ret = plannedVerfügbarReturnLineHtml(win.ab, win.bis, win.kind);
+        return `<li class="absence-list__item absence-list__item--geplant">
+          <div class="absence-list__head">
+            <strong>${escapeHtml(`${e.Vorname} ${e.Nachname}`)}</strong> ${dem} ${pillKind}
+          </div>
+          <div class="absence-list__body">
+            <div class="absence-list__line">${period}</div>
+            ${preLine}
+            <div class="absence-list__line absence-list__line--return">${ret}</div>
+          </div>
+        </li>`;
       })
+          .filter(Boolean)
           .join("")}</ul>`;
 
   const available = state.employees.filter((e) => e.Status === "Verfügbar");
@@ -770,7 +884,7 @@ function renderDashboard() {
     </div>
     <div class="panel">
       <div class="panel__head"><h2><i class="fa-solid fa-bed-pulse"></i> Abwesenheiten</h2></div>
-      <p class="hint">Bei Krankheit oder Urlaub: Abwesenheitszeitraum und geplanter erster Arbeitstag (Rückkehr) stehen unten. Bei Status „Verfügbar“ erscheint auf den Teamkarten ab fünf Tage vor Urlaubs- oder Krankheitsbeginn ein Hinweis mit Datum.</p>
+      <p class="hint">Laufende Krankheit/Urlaub sowie <strong>geplante</strong> Abwesenheiten (Start in den nächsten 5 Tagen oder heute im geplanten Zeitraum, bei Status „Verfügbar“). Geplanter erster Arbeitstag = Tag nach „bis“.</p>
       ${absenceHtml}
     </div>
     <div class="panel">
