@@ -444,7 +444,7 @@ function ensureSelectHasValue(sel, value, labelText) {
 
 function absenceHintText(status) {
   if (status === "Verfügbar") {
-    return "Zwei Pläne: Krankheit von/bis und Urlaub von/bis (Kalendertage inklusive). Ab 5 Tage vor „von“ zeigt das Dashboard je einen Hinweis. Laufende Abwesenheit: Status auf Krank oder Urlaub stellen und den passenden Zeitraum pflegen.";
+    return "Zwei Pläne: Krankheit von/bis und Urlaub von/bis (Kalendertage inklusive). Ab 5 Tage vor „von“ zeigt das Dashboard je einen Hinweis. Liegt heute im Zeitraum, wird der Status beim Laden der Datei oder beim Zurückkehren zur App automatisch auf „Krank“ bzw. „Urlaub“ gesetzt; nach einem abgeschlossenen Zeitraum (mit „bis“) wieder auf „Verfügbar“.";
   }
   if (status === "Krank" || status === "Urlaub") {
     return "„Von“ und „bis“ = erster bzw. letzter freier Tag; der erste Arbeitstag ist automatisch der Tag nach „bis“. Schnellbuttons setzen „bis“ auf eine bzw. zwei Wochen ab heute.";
@@ -644,6 +644,72 @@ function todayWithinInclusiveISO(ab, bis) {
   const b = bis && bis !== "" ? String(bis) : String(ab);
   if (ab == null || ab === "") return false;
   return t >= String(ab) && t <= b;
+}
+
+/**
+ * Liegt dayISO im inklusiven Abwesenheitszeitraum [ab, bis]?
+ * Ohne „bis“: abwesend ab `ab` einschließlich (offenes Ende).
+ * @param {string} dayISO
+ * @param {string|null|undefined} ab
+ * @param {string|null|undefined} bis
+ */
+function isDayInAbsenceRange(dayISO, ab, bis) {
+  if (ab == null || ab === "") return false;
+  const a = String(ab);
+  if (bis != null && bis !== "") {
+    return dayISO >= a && dayISO <= String(bis);
+  }
+  return dayISO >= a;
+}
+
+/**
+ * Liegt dayISO nach dem letzten Tag eines geschlossenen Zeitraums (nur wenn „bis“ gesetzt)?
+ * @param {string} dayISO
+ */
+function isDayAfterClosedAbsenceRange(dayISO, ab, bis) {
+  if (ab == null || ab === "") return false;
+  if (bis == null || bis === "") return false;
+  return dayISO > String(bis);
+}
+
+/**
+ * Soll-Status aus Kalenderdaten (Krank/Urlaub von–bis). Sonst bisherigen Status beibehalten,
+ * außer: Krank/Urlaub mit abgeschlossenem Zeitraum → Verfügbar.
+ * @param {Employee} emp
+ * @param {string} dayISO
+ */
+function computeAutoStatusForEmployee(emp, dayISO) {
+  const inK = isDayInAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis);
+  const inU = isDayInAbsenceRange(dayISO, emp.Urlaub_ab, emp.Urlaub_bis);
+  if (inK) return "Krank";
+  if (inU) return "Urlaub";
+  if (emp.Status === "Krank" && emp.Krank_ab && isDayAfterClosedAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) {
+    return "Verfügbar";
+  }
+  if (emp.Status === "Urlaub" && emp.Urlaub_ab && isDayAfterClosedAbsenceRange(dayISO, emp.Urlaub_ab, emp.Urlaub_bis)) {
+    return "Verfügbar";
+  }
+  return emp.Status;
+}
+
+/** Passt alle Mitarbeitenden-Status an den Kalendertag an. @returns {boolean} true bei Änderung */
+function syncEmployeeStatusesFromAbsenceDates(dayISO = todayISO()) {
+  if (!state) return false;
+  let changed = false;
+  for (const emp of state.employees) {
+    const next = computeAutoStatusForEmployee(emp, dayISO);
+    if (next !== emp.Status) {
+      emp.Status = next;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+async function runAutoStatusSyncAndPersist() {
+  if (!state) return;
+  if (!syncEmployeeStatusesFromAbsenceDates()) return;
+  await persist();
 }
 
 /** Geplanter Start sichtbar: heute im Zeitraum oder Start in 0…5 Tagen. */
@@ -2026,6 +2092,7 @@ function setupFileLinking() {
       const data = await linkLocalDataFile();
       state = data;
       clearUndoHistory();
+      await runAutoStatusSyncAndPersist();
       meta.textContent = `Aktiv: ${getLinkedFileName()} · Daten geladen`;
       $("#gate-screen").hidden = true;
       $("#app-workspace").hidden = false;
@@ -2577,6 +2644,17 @@ function setupDashboardDnD() {
   }
 }
 
+function setupAutoEmployeeStatusSync() {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !state) return;
+    void (async () => {
+      if (!syncEmployeeStatusesFromAbsenceDates()) return;
+      await persist();
+      refreshAllDataViews();
+    })();
+  });
+}
+
 function boot() {
   closeAllModalsAndBackdrops();
   state = null;
@@ -2591,6 +2669,7 @@ function boot() {
   setupDndAssignModal();
   setupProjectDropDelegation();
   setupFileLinking();
+  setupAutoEmployeeStatusSync();
   setupHistoryKeyboard();
   setNavEnabled(false);
 }
