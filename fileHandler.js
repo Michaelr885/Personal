@@ -42,12 +42,14 @@ export function createMockDataset() {
         Teamleiter_ID: 1,
         Beschäftigung: "Eigene",
         Stufe: "2",
+        Abteilung: "Mechanik",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
         Krank_bis: null,
         Urlaub_ab: addDays(t, 2),
         Urlaub_bis: addDays(t, 6),
+        Urlaub_perioden: [{ von: addDays(t, 20), bis: addDays(t, 24) }],
         Abwesenheit_geplant_ab: addDays(t, 2),
         Abwesenheit_geplant_bis: addDays(t, 6),
       },
@@ -61,6 +63,7 @@ export function createMockDataset() {
         Teamleiter_ID: 1,
         Beschäftigung: "AÜG",
         Stufe: "1",
+        Abteilung: "Steriltechnik",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -80,6 +83,7 @@ export function createMockDataset() {
         Teamleiter_ID: 2,
         Beschäftigung: "Eigene",
         Stufe: "3",
+        Abteilung: "KunststoffIch und Gewerbe",
         Status: "Krank",
         Krank_ab: addDays(t, -2),
         Krank_bis: addDays(t, 2),
@@ -99,6 +103,7 @@ export function createMockDataset() {
         Teamleiter_ID: 2,
         Beschäftigung: "AÜG",
         Stufe: "Bau",
+        Abteilung: "Rohrfertigung",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -118,6 +123,7 @@ export function createMockDataset() {
         Teamleiter_ID: 2,
         Beschäftigung: "Eigene",
         Stufe: "2",
+        Abteilung: "Mechanik",
         Status: "Urlaub",
         Krank_ab: null,
         Krank_bis: null,
@@ -137,6 +143,7 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Beschäftigung: "AÜG",
         Stufe: "1",
+        Abteilung: "Steriltechnik",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -156,6 +163,7 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Beschäftigung: "Eigene",
         Stufe: "ET",
+        Abteilung: "Rohrfertigung",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -175,6 +183,7 @@ export function createMockDataset() {
         Teamleiter_ID: 3,
         Beschäftigung: "Eigene",
         Stufe: "",
+        Abteilung: "KunststoffIch und Gewerbe",
         Status: "Verfügbar",
         Rückkehr_erwartet_am: null,
         Krank_ab: null,
@@ -276,6 +285,12 @@ function normalizeDataset(raw) {
     if (e.Krank_bis === undefined) e.Krank_bis = null;
     if (e.Urlaub_ab === undefined) e.Urlaub_ab = null;
     if (e.Urlaub_bis === undefined) e.Urlaub_bis = null;
+    if (e.Urlaub_perioden === undefined || !Array.isArray(e.Urlaub_perioden)) e.Urlaub_perioden = [];
+    if (e.Abteilung === undefined || e.Abteilung === null || String(e.Abteilung).trim() === "") {
+      e.Abteilung = "Mechanik";
+    } else {
+      e.Abteilung = String(e.Abteilung).trim();
+    }
 
     const bRaw = e.Beschäftigung;
     if (bRaw === undefined || bRaw === null || bRaw === "") {

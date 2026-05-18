@@ -1184,3 +1184,15 @@ textarea {
 .gantt .bar-progress {
   fill: rgba(255, 255, 255, 0.35);
 }
+
+.urlaub-perioden-host .urlaub-per-row {
+  padding-top: 0.35rem;
+  margin-top: 0.35rem;
+  border-top: 1px dashed var(--border);
+}
+
+.urlaub-perioden-host .urlaub-per-row:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}

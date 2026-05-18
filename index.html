@@ -279,6 +279,16 @@
                     <span>Stufe</span>
                     <select id="personnel-filter-stufe"></select>
                   </label>
+                  <label class="field-inline">
+                    <span>Abteilung</span>
+                    <select id="personnel-filter-abteilung">
+                      <option value="">Alle</option>
+                      <option>Mechanik</option>
+                      <option>Steriltechnik</option>
+                      <option>KunststoffIch und Gewerbe</option>
+                      <option>Rohrfertigung</option>
+                    </select>
+                  </label>
                 </div>
               </div>
               <div class="table-wrap">
@@ -290,6 +300,7 @@
                       <th>Qualifikation</th>
                       <th>AÜG/Eigene</th>
                       <th>Stufe</th>
+                      <th>Abteilung</th>
                       <th>Teamleitung</th>
                       <th>Status</th>
                       <th>Abwesenheit / Plan</th>
@@ -332,6 +343,15 @@
                 <label>
                   Stufe
                   <input type="text" id="new-emp-stufe" maxlength="40" placeholder="optional" autocomplete="off" />
+                </label>
+                <label>
+                  Abteilung
+                  <select id="new-emp-abteilung" required>
+                    <option>Mechanik</option>
+                    <option>Steriltechnik</option>
+                    <option>KunststoffIch und Gewerbe</option>
+                    <option>Rohrfertigung</option>
+                  </select>
                 </label>
                 <label>
                   Teamleitung (optional)
@@ -379,6 +399,16 @@
                   </span>
                   <input type="date" id="new-emp-urlaub-bis" />
                 </label>
+                    <p class="form-range-head span-2">Weitere Urlaubszeiträume (optional)</p>
+                    <p class="hint span-2">
+                      Für mehrere Urlaubsblöcke im Jahr: Zeilen hinzufügen (Von–Bis). Der Haupt-Urlaub oben bleibt erhalten.
+                    </p>
+                    <div id="new-emp-urlaub-perioden" class="span-2 urlaub-perioden-host"></div>
+                    <div class="span-2">
+                      <button type="button" class="btn btn--ghost btn--small" id="new-emp-urlaub-add">
+                        <i class="fa-solid fa-plus"></i> Zeile für weiteren Urlaub
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div class="form-actions span-2">
@@ -426,6 +456,15 @@
                 <label>
                   Stufe
                   <input type="text" id="emp-stufe" maxlength="40" placeholder="z. B. 1A" autocomplete="off" />
+                </label>
+                <label>
+                  Abteilung
+                  <select id="emp-abteilung" required>
+                    <option>Mechanik</option>
+                    <option>Steriltechnik</option>
+                    <option>KunststoffIch und Gewerbe</option>
+                    <option>Rohrfertigung</option>
+                  </select>
                 </label>
                 <label class="span-2">
                   Zusatz-Tags (Komma-getrennt)
@@ -477,6 +516,16 @@
                   </span>
                   <input type="date" id="emp-urlaub-bis" />
                 </label>
+                    <p class="form-range-head span-2">Weitere Urlaubszeiträume (optional)</p>
+                    <p class="hint span-2">
+                      Für mehrere Urlaubsblöcke im Jahr: Zeilen hinzufügen (Von–Bis). Der Haupt-Urlaub oben bleibt erhalten.
+                    </p>
+                    <div id="emp-urlaub-perioden" class="span-2 urlaub-perioden-host"></div>
+                    <div class="span-2">
+                      <button type="button" class="btn btn--ghost btn--small" id="emp-urlaub-add">
+                        <i class="fa-solid fa-plus"></i> Zeile für weiteren Urlaub
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div class="form-actions span-2">

@@ -5,7 +5,8 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null }} Employee */
+/** @typedef {{ von: string, bis: string|null }} Urlaubsperiode */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_perioden: Urlaubsperiode[] }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -21,6 +22,38 @@ const QUALIFICATIONS = [
 const BESCHÄFTIGUNG_AÜG = "AÜG";
 const BESCHÄFTIGUNG_EIGENE = "Eigene";
 
+/** Feste Abteilungsliste (Personal-Tabelle & Dropdown). */
+const ABTEILUNGEN = /** @type {const} */ ([
+  "Mechanik",
+  "Steriltechnik",
+  "KunststoffIch und Gewerbe",
+  "Rohrfertigung",
+]);
+
+/** @param {unknown} raw */
+function normalizeAbteilung(raw) {
+  const s = String(raw ?? "").trim();
+  if (/** @type {readonly string[]} */ (ABTEILUNGEN).includes(s)) return s;
+  return ABTEILUNGEN[0];
+}
+
+/** @param {unknown} raw @returns {Urlaubsperiode[]} */
+function normalizeUrlaubPerioden(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {Urlaubsperiode[]} */
+  const out = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const o = /** @type {Record<string, unknown>} */ (row);
+    const von = String(o.von ?? o.ab ?? o.Urlaub_ab ?? "").trim();
+    if (!von) continue;
+    const bisRaw = o.bis ?? o.Urlaub_bis ?? "";
+    const bisStr = bisRaw == null || bisRaw === "" ? null : String(bisRaw).trim();
+    out.push({ von, bis: bisStr || null });
+  }
+  return out;
+}
+
 /** @param {unknown} raw @returns {"AÜG"|"Eigene"} */
 function normalizeBeschäftigung(raw) {
   const s = String(raw ?? "").trim();
@@ -33,6 +66,8 @@ function normalizeAllEmployeesShape() {
   for (const emp of state.employees) {
     emp.Beschäftigung = normalizeBeschäftigung(emp.Beschäftigung);
     emp.Stufe = emp.Stufe != null && emp.Stufe !== "" ? String(emp.Stufe).trim() : "";
+    emp.Abteilung = normalizeAbteilung(emp.Abteilung);
+    emp.Urlaub_perioden = normalizeUrlaubPerioden(emp.Urlaub_perioden);
   }
 }
 
@@ -234,7 +269,9 @@ function firstWorkdayAfterAbsenceEnd(/** @type {Employee} */ emp) {
       : null;
   }
   if (emp.Status === "Urlaub") {
-    const bis = emp.Urlaub_bis;
+    const t = todayISO();
+    const r = currentUrlaubRangeForDay(emp, t);
+    const bis = r ? r.bis : emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
     if (bis != null && bis !== "") return addCalendarDaysToISO(String(bis), 1);
     return emp.Rückkehr_erwartet_am != null && emp.Rückkehr_erwartet_am !== ""
       ? String(emp.Rückkehr_erwartet_am)
@@ -249,19 +286,89 @@ function syncLegacyAbsenceFields(/** @type {Employee} */ emp) {
     emp.Rückkehr_erwartet_am =
       emp.Krank_bis != null && emp.Krank_bis !== "" ? addCalendarDaysToISO(String(emp.Krank_bis), 1) : null;
   } else if (emp.Status === "Urlaub") {
-    emp.Rückkehr_erwartet_am =
-      emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? addCalendarDaysToISO(String(emp.Urlaub_bis), 1) : null;
+    const t = todayISO();
+    const r = currentUrlaubRangeForDay(emp, t);
+    if (r && r.bis != null && r.bis !== "") {
+      emp.Rückkehr_erwartet_am = addCalendarDaysToISO(String(r.bis), 1);
+    } else {
+      emp.Rückkehr_erwartet_am =
+        emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? addCalendarDaysToISO(String(emp.Urlaub_bis), 1) : null;
+    }
   } else {
     emp.Rückkehr_erwartet_am = null;
   }
-  emp.Abwesenheit_geplant_ab =
-    emp.Urlaub_ab != null && emp.Urlaub_ab !== "" ? String(emp.Urlaub_ab) : null;
-  emp.Abwesenheit_geplant_bis =
-    emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+  const env = urlaubPlannedEnvelope(emp);
+  if (env) {
+    emp.Abwesenheit_geplant_ab = env.ab;
+    emp.Abwesenheit_geplant_bis = env.bis;
+  } else {
+    emp.Abwesenheit_geplant_ab = null;
+    emp.Abwesenheit_geplant_bis = null;
+  }
 }
 
 function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   return aStart <= bEnd && bStart <= aEnd;
+}
+
+/**
+ * Alle Urlaubs-Zeiträume: Hauptfelder Urlaub_ab/bis plus zusätzliche Einträge in Urlaub_perioden.
+ * @param {Employee} emp
+ * @returns {{ ab: string; bis: string | null }[]}
+ */
+function getUrlaubRanges(emp) {
+  /** @type {{ ab: string; bis: string | null }[]} */
+  const ranges = [];
+  if (emp.Urlaub_ab != null && emp.Urlaub_ab !== "") {
+    const bis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+    ranges.push({ ab: String(emp.Urlaub_ab), bis });
+  }
+  for (const p of emp.Urlaub_perioden || []) {
+    if (!p || !p.von) continue;
+    const bis = p.bis != null && p.bis !== "" ? String(p.bis) : null;
+    ranges.push({ ab: String(p.von), bis });
+  }
+  return ranges;
+}
+
+/** @param {string} dayISO @param {Employee} emp */
+function isDayInAnyUrlaubRange(dayISO, emp) {
+  return getUrlaubRanges(emp).some((r) => isDayInAbsenceRange(dayISO, r.ab, r.bis));
+}
+
+/** @param {Employee} emp */
+function hasAnyUrlaubStart(emp) {
+  return getUrlaubRanges(emp).length > 0;
+}
+
+/**
+ * Zeitraum, der den Kalendertag abdeckt (für Rückkehr / Anzeige).
+ * @param {Employee} emp
+ * @param {string} dayISO
+ */
+function currentUrlaubRangeForDay(emp, dayISO) {
+  for (const r of getUrlaubRanges(emp)) {
+    if (isDayInAbsenceRange(dayISO, r.ab, r.bis)) return r;
+  }
+  return null;
+}
+
+/**
+ * Einhüllende für Abwesenheit_geplant_* (frühester Start, spätestes Ende).
+ * @param {Employee} emp
+ * @returns {{ ab: string; bis: string } | null}
+ */
+function urlaubPlannedEnvelope(emp) {
+  const ranges = getUrlaubRanges(emp);
+  if (!ranges.length) return null;
+  let minAb = ranges[0].ab;
+  let maxEnd = ranges[0].bis ?? ranges[0].ab;
+  for (const r of ranges) {
+    if (r.ab < minAb) minAb = r.ab;
+    const end = r.bis ?? r.ab;
+    if (end > maxEnd) maxEnd = end;
+  }
+  return { ab: minAb, bis: maxEnd };
 }
 
 function getEmployee(id) {
@@ -336,10 +443,24 @@ function absenceReturnBadgeHtml(emp) {
 function plannedAbsenceBadgeHtml(emp) {
   if (emp.Status !== "Verfügbar") return "";
   const chunks = [];
-  for (const spec of [
-    { label: "Urlaub", von: emp.Urlaub_ab, bis: emp.Urlaub_bis, icon: "fa-umbrella-beach" },
-    { label: "Krank", von: emp.Krank_ab, bis: emp.Krank_bis, icon: "fa-file-medical" },
-  ]) {
+  for (const r of getUrlaubRanges(emp)) {
+    const von = r.ab;
+    const bis = r.bis;
+    const label = "Urlaub";
+    const icon = "fa-umbrella-beach";
+    if (von == null || von === "") continue;
+    const d = daysUntilISODate(String(von));
+    if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
+    const vonDe = formatDateDE(String(von));
+    const bisPart =
+      bis && String(bis) !== String(von)
+        ? ` bis <strong>${escapeHtml(formatDateDE(String(bis)))}</strong>`
+        : "";
+    chunks.push(
+      `<span class="warn-abs" title="Geplanter ${label} ab ${escapeHtml(String(von))}${bis ? ` bis ${escapeHtml(String(bis))}` : ""}"><i class="fa-solid ${icon}"></i> ${label} ab <strong>${escapeHtml(vonDe)}</strong>${bisPart} · noch ${d} Tag${d === 1 ? "" : "e"}</span>`
+    );
+  }
+  for (const spec of /** @type {const} */ ([{ label: "Krank", von: emp.Krank_ab, bis: emp.Krank_bis, icon: "fa-file-medical" }])) {
     const { label, von, bis, icon } = spec;
     if (von == null || von === "") continue;
     const d = daysUntilISODate(String(von));
@@ -371,10 +492,24 @@ function plannedAbsenceBadgeHtml(emp) {
 function absenceSummaryPlain(emp) {
   const parts = [];
   if (emp.Status === "Krank" || emp.Status === "Urlaub") {
-    const ab = emp.Status === "Krank" ? emp.Krank_ab : emp.Urlaub_ab;
-    const bis = emp.Status === "Krank" ? emp.Krank_bis : emp.Urlaub_bis;
-    if ((ab != null && ab !== "") || (bis != null && bis !== "")) {
-      parts.push(`${emp.Status} ${ab ?? "…"}–${bis ?? "…"}`);
+    if (emp.Status === "Krank") {
+      const ab = emp.Krank_ab;
+      const bis = emp.Krank_bis;
+      if ((ab != null && ab !== "") || (bis != null && bis !== "")) {
+        parts.push(`${emp.Status} ${ab ?? "…"}–${bis ?? "…"}`);
+      }
+    } else {
+      const t = todayISO();
+      const r = currentUrlaubRangeForDay(emp, t);
+      if (r) {
+        parts.push(`Urlaub ${r.ab}–${r.bis ?? "…"}`);
+      } else {
+        const ranges = getUrlaubRanges(emp);
+        if (ranges.length) {
+          const segs = ranges.map((x) => `${x.ab}–${x.bis ?? "…"}`);
+          parts.push(`Urlaub: ${segs.join(", ")}`);
+        }
+      }
     }
     const ret = firstWorkdayAfterAbsenceEnd(emp);
     if (ret == null || ret === "") parts.push("Rückkehr: —");
@@ -394,7 +529,9 @@ function absenceSummaryPlain(emp) {
       else if (d !== null && Number.isFinite(d) && d > 5) parts.push(`${label} geplant ab ${von}`);
     };
     pushPlan("Krank", emp.Krank_ab);
-    pushPlan("Urlaub", emp.Urlaub_ab);
+    for (const r of getUrlaubRanges(emp)) {
+      pushPlan("Urlaub", r.ab);
+    }
     if (!parts.some((p) => p.startsWith("Krank") || p.startsWith("Urlaub"))) {
       const von = emp.Abwesenheit_geplant_ab;
       if (von) {
@@ -411,14 +548,19 @@ function absenceSummaryPlain(emp) {
 function plannedAbsencePoolLine(emp) {
   if (emp.Status !== "Verfügbar") return "";
   const lines = [];
-  for (const [label, von] of /** @type {const} */ ([
-    ["Urlaub", emp.Urlaub_ab],
-    ["Krank", emp.Krank_ab],
-  ])) {
+  for (const r of getUrlaubRanges(emp)) {
+    const von = r.ab;
     if (von == null || von === "") continue;
     const d = daysUntilISODate(String(von));
     if (d === null || !Number.isFinite(d) || d < 0 || d > 5) continue;
-    lines.push(`${label} ab ${formatDateDE(String(von))} · in ${d} Tag${d === 1 ? "" : "en"}`);
+    lines.push(`Urlaub ab ${formatDateDE(String(von))} · in ${d} Tag${d === 1 ? "" : "en"}`);
+  }
+  const kVon = emp.Krank_ab;
+  if (kVon != null && kVon !== "") {
+    const d = daysUntilISODate(String(kVon));
+    if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) {
+      lines.push(`Krank ab ${formatDateDE(String(kVon))} · in ${d} Tag${d === 1 ? "" : "en"}`);
+    }
   }
   if (lines.length) return lines.join(" · ");
   const von = emp.Abwesenheit_geplant_ab;
@@ -464,10 +606,10 @@ function ensureSelectHasValue(sel, value, labelText) {
 
 function absenceHintText(status) {
   if (status === "Verfügbar") {
-    return "Zwei Pläne: Krankheit von/bis und Urlaub von/bis (Kalendertage inklusive). Ab 5 Tage vor „von“ zeigt das Dashboard je einen Hinweis. Liegt heute im Zeitraum, wird der Status beim Laden der Datei oder beim Zurückkehren zur App automatisch auf „Krank“ bzw. „Urlaub“ gesetzt; nach einem abgeschlossenen Zeitraum (mit „bis“) wieder auf „Verfügbar“.";
+    return "Krankheit und Urlaub: Hauptzeitraum (von/bis) plus beliebig viele weitere Urlaubsblöcke. Kalendertage inklusive. Ab 5 Tage vor „von“ zeigt das Dashboard Hinweise. Liegt heute in einem Urlaubs- oder Krankheitszeitraum, wird der Status automatisch angepasst; nach abgeschlossenen Zeiträumen (mit „bis“) wieder „Verfügbar“.";
   }
   if (status === "Krank" || status === "Urlaub") {
-    return "„Von“ und „bis“ = erster bzw. letzter freier Tag; der erste Arbeitstag ist automatisch der Tag nach „bis“. Schnellbuttons setzen „bis“ auf eine bzw. zwei Wochen ab heute.";
+    return "„Von“ und „bis“ = erster bzw. letzter freier Tag; der erste Arbeitstag ist automatisch der Tag nach „bis“. Zusätzliche Urlaubszeiten unten eintragen. Schnellbuttons setzen „bis“ auf eine bzw. zwei Wochen ab heute.";
   }
   return "";
 }
@@ -492,6 +634,48 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function urlaubPeriodRowTemplate(von = "", bis = "") {
+  const v = von ? escapeHtml(von) : "";
+  const b = bis ? escapeHtml(bis) : "";
+  return `<div class="urlaub-per-row form-grid form-grid--wide form-section__grid">
+    <label>Weiterer Urlaub von (optional)<input type="date" class="js-u-von" value="${v}" /></label>
+    <label>Bis (optional)<input type="date" class="js-u-bis" value="${b}" /></label>
+    <div class="form-actions--inline"><button type="button" class="btn btn--ghost btn--tiny js-u-remove" title="Zeile entfernen"><i class="fa-solid fa-xmark"></i> Entfernen</button></div>
+  </div>`;
+}
+
+function renderUrlaubPeriodenContainer(hostId, /** @type {Urlaubsperiode[]} */ periods) {
+  const host = document.getElementById(hostId);
+  if (!(host instanceof HTMLElement)) return;
+  const list = periods && periods.length ? periods : [];
+  host.innerHTML = list.length ? list.map((p) => urlaubPeriodRowTemplate(p.von, p.bis ?? "")).join("") : "";
+}
+
+function collectUrlaubPeriodenFromContainer(hostId) {
+  const host = document.getElementById(hostId);
+  if (!(host instanceof HTMLElement)) return /** @type {Urlaubsperiode[]} */ ([]);
+  /** @type {Urlaubsperiode[]} */
+  const out = [];
+  for (const row of host.querySelectorAll(".urlaub-per-row")) {
+    const vonEl = row.querySelector(".js-u-von");
+    const bisEl = row.querySelector(".js-u-bis");
+    const von = vonEl instanceof HTMLInputElement ? vonEl.value.trim() : "";
+    const bisRaw = bisEl instanceof HTMLInputElement ? bisEl.value.trim() : "";
+    if (!von && !bisRaw) continue;
+    if (!von) continue;
+    out.push({ von, bis: bisRaw === "" ? null : bisRaw });
+  }
+  return out;
+}
+
+/** @param {unknown} raw @returns {boolean} */
+function validateUrlaubPeriodOrder(rawVon, rawBis) {
+  const von = rawVon == null || rawVon === "" ? null : String(rawVon);
+  const bis = rawBis == null || rawBis === "" ? null : String(rawBis);
+  if (von && bis && bis < von) return false;
+  return true;
 }
 
 /** @param {unknown} c */
@@ -700,13 +884,13 @@ function isDayAfterClosedAbsenceRange(dayISO, ab, bis) {
  */
 function computeAutoStatusForEmployee(emp, dayISO) {
   const inK = isDayInAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis);
-  const inU = isDayInAbsenceRange(dayISO, emp.Urlaub_ab, emp.Urlaub_bis);
+  const inU = isDayInAnyUrlaubRange(dayISO, emp);
   if (inK) return "Krank";
   if (inU) return "Urlaub";
   if (emp.Status === "Krank" && emp.Krank_ab && isDayAfterClosedAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) {
     return "Verfügbar";
   }
-  if (emp.Status === "Urlaub" && emp.Urlaub_ab && isDayAfterClosedAbsenceRange(dayISO, emp.Urlaub_ab, emp.Urlaub_bis)) {
+  if (emp.Status === "Urlaub" && hasAnyUrlaubStart(emp) && !inU) {
     return "Verfügbar";
   }
   return emp.Status;
@@ -754,7 +938,9 @@ function plannedWindowVisibleOnDashboard(ab, bis) {
 function employeeMatchesDashboardAbsencePanel(emp) {
   if (emp.Status === "Krank" || emp.Status === "Urlaub") return true;
   if (emp.Status !== "Verfügbar") return false;
-  if (plannedWindowVisibleOnDashboard(emp.Urlaub_ab, emp.Urlaub_bis)) return true;
+  for (const r of getUrlaubRanges(emp)) {
+    if (plannedWindowVisibleOnDashboard(r.ab, r.bis)) return true;
+  }
   if (plannedWindowVisibleOnDashboard(emp.Krank_ab, emp.Krank_bis)) return true;
   return plannedWindowVisibleOnDashboard(emp.Abwesenheit_geplant_ab, emp.Abwesenheit_geplant_bis);
 }
@@ -771,12 +957,14 @@ function verfügbarDashboardAbsenceDisplayWindow(emp) {
     if (ab == null || ab === "") return;
     const b = bis && bis !== "" ? String(bis) : String(ab);
     if (!plannedWindowVisibleOnDashboard(ab, bis)) return;
-    const key = `${String(ab)}|${b}`;
+    const key = `${String(ab)}|${b}|${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
     windows.push({ kind, ab: String(ab), bis: b });
   };
-  push("Urlaub", emp.Urlaub_ab, emp.Urlaub_bis);
+  for (const r of getUrlaubRanges(emp)) {
+    push("Urlaub", r.ab, r.bis);
+  }
   push("Krank", emp.Krank_ab, emp.Krank_bis);
   push("Urlaub", emp.Abwesenheit_geplant_ab, emp.Abwesenheit_geplant_bis);
   if (!windows.length) return null;
@@ -812,12 +1000,27 @@ function plannedVerfügbarReturnLineHtml(ab, bis, kind = "Urlaub") {
 /** Krank/Urlaub: Abwesenheitszeitraum für die Dashboard-Abwesenheitsliste. */
 function activeAbsencePeriodHtml(emp) {
   if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
-  const ab = emp.Status === "Krank" ? emp.Krank_ab : emp.Urlaub_ab;
-  const bis = emp.Status === "Krank" ? emp.Krank_bis : emp.Urlaub_bis;
-  if ((!ab || ab === "") && (!bis || bis === "")) return "";
-  const a = ab ? formatDateDE(String(ab)) : "…";
-  const b = bis ? formatDateDE(String(bis)) : "…";
-  return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong></span>`;
+  if (emp.Status === "Krank") {
+    const ab = emp.Krank_ab;
+    const bis = emp.Krank_bis;
+    if ((!ab || ab === "") && (!bis || bis === "")) return "";
+    const a = ab ? formatDateDE(String(ab)) : "…";
+    const b = bis ? formatDateDE(String(bis)) : "…";
+    return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong></span>`;
+  }
+  const t = todayISO();
+  const r = currentUrlaubRangeForDay(emp, t);
+  if (r) {
+    const a = formatDateDE(String(r.ab));
+    const b = r.bis ? formatDateDE(String(r.bis)) : "…";
+    return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong></span>`;
+  }
+  const ranges = getUrlaubRanges(emp);
+  if (!ranges.length) return "";
+  const a = formatDateDE(String(ranges[0].ab));
+  const b = ranges[0].bis ? formatDateDE(String(ranges[0].bis)) : "…";
+  const more = ranges.length > 1 ? ` <span class="hint">(und ${ranges.length - 1} weitere)</span>` : "";
+  return `<span class="absence-list__period">Abwesend <strong>${escapeHtml(a)}</strong> – <strong>${escapeHtml(b)}</strong>${more}</span>`;
 }
 
 /** Ohne das frisst iOS/Safari Touch-Züge, solange draggable="true" gesetzt ist. */
@@ -1760,6 +1963,7 @@ function renderPersonnelTable() {
   const fq = /** @type {HTMLSelectElement} */ ($("#personnel-filter-qual")).value;
   const fBesch = /** @type {HTMLSelectElement} */ ($("#personnel-filter-beschäftigung")).value;
   const fStufe = /** @type {HTMLSelectElement} */ ($("#personnel-filter-stufe")).value;
+  const fAbt = /** @type {HTMLSelectElement} */ ($("#personnel-filter-abteilung")).value;
 
   const rows = state.employees
     .filter((e) => {
@@ -1769,6 +1973,7 @@ function renderPersonnelTable() {
       if (fq && e.Qualifikation !== fq) return false;
       if (fBesch && normalizeBeschäftigung(e.Beschäftigung) !== fBesch) return false;
       if (fStufe && String(e.Stufe ?? "").trim() !== fStufe) return false;
+      if (fAbt && normalizeAbteilung(e.Abteilung) !== fAbt) return false;
       return true;
     })
     .map((e) => {
@@ -1776,12 +1981,14 @@ function renderPersonnelTable() {
       const sc = statusCellClass(e.Status);
       const besch = normalizeBeschäftigung(e.Beschäftigung);
       const stufe = String(e.Stufe ?? "").trim();
+      const abt = normalizeAbteilung(e.Abteilung);
       return `<tr>
         <td>${e.Personalnummer}</td>
         <td>${e.Vorname} ${e.Nachname}</td>
         <td>${e.Qualifikation}</td>
         <td>${escapeHtml(besch)}</td>
         <td>${stufe ? escapeHtml(stufe) : "—"}</td>
+        <td>${escapeHtml(abt)}</td>
         <td>${tl ? escapeHtml(tl.Name) : "Keine"}</td>
         <td class="${sc}">${e.Status}</td>
         <td class="hint">${escapeHtml(absenceSummaryPlain(e))}</td>
@@ -1793,7 +2000,7 @@ function renderPersonnelTable() {
     })
     .join("");
   tbody.innerHTML =
-    rows || '<tr><td colspan="9" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
+    rows || '<tr><td colspan="10" class="hint">Keine Treffer für die aktuelle Filterung.</td></tr>';
 }
 
 async function deleteEmployeeById(id) {
@@ -1871,6 +2078,7 @@ function loadEmployeeIntoForm(id) {
     ensureSelectHasValue(beschSel, normalizeBeschäftigung(e.Beschäftigung), normalizeBeschäftigung(e.Beschäftigung));
     /** @type {HTMLInputElement} */ ($("#emp-stufe")).value =
       e.Stufe != null && e.Stufe !== "" ? String(e.Stufe) : "";
+    /** @type {HTMLSelectElement} */ ($("#emp-abteilung")).value = normalizeAbteilung(e.Abteilung);
     /** @type {HTMLInputElement} */ ($("#emp-tags")).value = (e.Zusatz_Tags || []).join(", ");
     /** @type {HTMLSelectElement} */ ($("#emp-tl")).value =
       e.Teamleiter_ID != null && e.Teamleiter_ID !== "" && hasValidTeamLeader(e)
@@ -1886,6 +2094,7 @@ function loadEmployeeIntoForm(id) {
       e.Urlaub_ab != null && e.Urlaub_ab !== "" ? String(e.Urlaub_ab) : "";
     /** @type {HTMLInputElement} */ ($("#emp-urlaub-bis")).value =
       e.Urlaub_bis != null && e.Urlaub_bis !== "" ? String(e.Urlaub_bis) : "";
+    renderUrlaubPeriodenContainer("emp-urlaub-perioden", e.Urlaub_perioden || []);
     $("#employee-form-title").innerHTML =
       '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
     syncEditAbsenceHint();
@@ -1910,6 +2119,7 @@ function loadEmployeeIntoForm(id) {
 function resetEmployeeForm() {
   /** @type {HTMLFormElement} */ ($("#employee-form")).reset();
   /** @type {HTMLInputElement} */ ($("#emp-id")).value = "";
+  renderUrlaubPeriodenContainer("emp-urlaub-perioden", []);
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
   syncEditAbsenceHint();
@@ -1970,12 +2180,38 @@ function renderPersonnelView() {
   syncNewAbsenceHint();
 }
 
+function bindUrlaubPeriodenButtonsOnce() {
+  const ws = /** @type {HTMLElement | null} */ ($("#app-workspace"));
+  if (!ws || ws.dataset.urlaubPeriodUi === "1") return;
+  ws.dataset.urlaubPeriodUi = "1";
+  ws.addEventListener("click", (ev) => {
+    const t = ev.target instanceof Element ? ev.target : null;
+    if (t?.closest("#emp-urlaub-add")) {
+      ev.preventDefault();
+      document.getElementById("emp-urlaub-perioden")?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      return;
+    }
+    if (t?.closest("#new-emp-urlaub-add")) {
+      ev.preventDefault();
+      document.getElementById("new-emp-urlaub-perioden")?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      return;
+    }
+    const rem = t?.closest(".js-u-remove");
+    if (rem) {
+      ev.preventDefault();
+      rem.closest(".urlaub-per-row")?.remove();
+    }
+  });
+}
+
 function setupPersonnelInteractions() {
+  bindUrlaubPeriodenButtonsOnce();
   $("#personnel-search").addEventListener("input", renderPersonnelTable);
   $("#personnel-filter-status").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-qual").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-beschäftigung").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-stufe").addEventListener("change", renderPersonnelTable);
+  $("#personnel-filter-abteilung").addEventListener("change", renderPersonnelTable);
 
   $("#emp-status").addEventListener("change", syncEditAbsenceHint);
   $("#new-emp-status").addEventListener("change", syncNewAbsenceHint);
@@ -2019,6 +2255,17 @@ function setupPersonnelInteractions() {
       );
       return;
     }
+    const uPeriods = collectUrlaubPeriodenFromContainer("emp-urlaub-perioden");
+    for (const p of uPeriods) {
+      if (!validateUrlaubPeriodOrder(p.von, p.bis)) {
+        await openModal(
+          "Datum prüfen",
+          "<div>Bei einem weiteren Urlaubszeitraum darf „Bis“ nicht vor „Von“ liegen.</div>",
+          { variant: "info", confirmText: "Verstanden" }
+        );
+        return;
+      }
+    }
     const payload = {
       Personalnummer: /** @type {HTMLInputElement} */ ($("#emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#emp-vorname")).value.trim(),
@@ -2028,11 +2275,13 @@ function setupPersonnelInteractions() {
       Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
       Beschäftigung: normalizeBeschäftigung(/** @type {HTMLSelectElement} */ ($("#emp-beschäftigung")).value),
       Stufe: /** @type {HTMLInputElement} */ ($("#emp-stufe")).value.trim(),
+      Abteilung: normalizeAbteilung(/** @type {HTMLSelectElement} */ ($("#emp-abteilung")).value),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
       Krank_ab: kAb,
       Krank_bis: kBis,
       Urlaub_ab: uAb,
       Urlaub_bis: uBis,
+      Urlaub_perioden: uPeriods,
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
     if (idx >= 0) {
@@ -2073,6 +2322,17 @@ function setupPersonnelInteractions() {
       );
       return;
     }
+    const uPeriodsN = collectUrlaubPeriodenFromContainer("new-emp-urlaub-perioden");
+    for (const p of uPeriodsN) {
+      if (!validateUrlaubPeriodOrder(p.von, p.bis)) {
+        await openModal(
+          "Datum prüfen",
+          "<div>Bei einem weiteren Urlaubszeitraum darf „Bis“ nicht vor „Von“ liegen.</div>",
+          { variant: "info", confirmText: "Verstanden" }
+        );
+        return;
+      }
+    }
     const newEmp = /** @type {Employee} */ ({
       ID: nextId(state.employees),
       Personalnummer: /** @type {HTMLInputElement} */ ($("#new-emp-pnr")).value.trim(),
@@ -2081,6 +2341,7 @@ function setupPersonnelInteractions() {
       Qualifikation: /** @type {HTMLSelectElement} */ ($("#new-emp-qual")).value,
       Beschäftigung: normalizeBeschäftigung(/** @type {HTMLSelectElement} */ ($("#new-emp-beschäftigung")).value),
       Stufe: /** @type {HTMLInputElement} */ ($("#new-emp-stufe")).value.trim(),
+      Abteilung: normalizeAbteilung(/** @type {HTMLSelectElement} */ ($("#new-emp-abteilung")).value),
       Teamleiter_ID: (() => {
         const raw = /** @type {HTMLSelectElement} */ ($("#new-emp-tl")).value;
         return raw === "" ? null : Number(raw);
@@ -2091,6 +2352,7 @@ function setupPersonnelInteractions() {
       Krank_bis: kBisN,
       Urlaub_ab: uAbN,
       Urlaub_bis: uBisN,
+      Urlaub_perioden: uPeriodsN,
       Rückkehr_erwartet_am: null,
       Abwesenheit_geplant_ab: null,
       Abwesenheit_geplant_bis: null,
@@ -2100,6 +2362,7 @@ function setupPersonnelInteractions() {
     state.employees.push(newEmp);
     await syncEmployeesThenPersist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
+    renderUrlaubPeriodenContainer("new-emp-urlaub-perioden", []);
     fillNewEmployeeSelects();
     renderPersonnelView();
     renderDashboard();
@@ -2180,9 +2443,9 @@ function setupFileLinking() {
 
 function dashAbsRangeHintText(status) {
   if (status === "Krank") {
-    return "Wird in den Stammdaten unter Krankheit von/bis gespeichert. Geplanter Urlaub (Felder Urlaub) bleibt unverändert.";
+    return "Wird in den Stammdaten unter Krankheit von/bis gespeichert. Geplanter Urlaub (Felder Urlaub und weitere Urlaubszeiträume) bleibt unverändert.";
   }
-  return "Wird in den Stammdaten unter Urlaub von/bis gespeichert. Geplante Krankheit (Felder Krankheit) bleibt unverändert.";
+  return "Wird in den Stammdaten unter Urlaub von/bis gespeichert. Weitere Urlaubsblöcke und geplante Krankheit bleiben unverändert.";
 }
 
 function syncDashAbsRangeHint() {
@@ -2216,9 +2479,25 @@ function openDashboardAbsenceModal(empId) {
   if (emp.Status === "Krank" && emp.Krank_ab) {
     if (vonEl) vonEl.value = String(emp.Krank_ab);
     if (bisEl) bisEl.value = emp.Krank_bis ? String(emp.Krank_bis) : t;
-  } else if (emp.Status === "Urlaub" && emp.Urlaub_ab) {
-    if (vonEl) vonEl.value = String(emp.Urlaub_ab);
-    if (bisEl) bisEl.value = emp.Urlaub_bis ? String(emp.Urlaub_bis) : t;
+  } else if (emp.Status === "Urlaub") {
+    const r = currentUrlaubRangeForDay(emp, t);
+    if (r) {
+      if (vonEl) vonEl.value = String(r.ab);
+      if (bisEl) bisEl.value = r.bis ? String(r.bis) : t;
+    } else if (emp.Urlaub_ab) {
+      if (vonEl) vonEl.value = String(emp.Urlaub_ab);
+      if (bisEl) bisEl.value = emp.Urlaub_bis ? String(emp.Urlaub_bis) : t;
+    } else {
+      const ranges = getUrlaubRanges(emp);
+      const first = ranges[0];
+      if (first) {
+        if (vonEl) vonEl.value = String(first.ab);
+        if (bisEl) bisEl.value = first.bis ? String(first.bis) : t;
+      } else {
+        if (vonEl) vonEl.value = t;
+        if (bisEl) bisEl.value = t;
+      }
+    }
   } else {
     if (vonEl) vonEl.value = t;
     if (bisEl) bisEl.value = t;
