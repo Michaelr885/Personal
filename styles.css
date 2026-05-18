@@ -506,15 +506,29 @@ code {
 }
 
 .gantt-wrap {
+  min-width: 0;
+  min-height: 220px;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+/* Frappe legt .gantt-container { overflow: auto } an — SVG darf nicht auf 100% gequetscht werden,
+   sonst gibt es keinen horizontalen Overflow / keine Scrollbar. */
+#gantt-container .gantt-container {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 220px;
 }
 
-#gantt-container .gantt-container,
 #gantt-container svg.gantt {
   display: block;
-  width: 100%;
-  min-width: 600px;
+  width: auto;
+  max-width: none;
+  height: auto;
   min-height: 220px;
 }
 
