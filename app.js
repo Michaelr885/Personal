@@ -2559,13 +2559,20 @@ function collectProjectQualificationsFromEditor() {
   return out;
 }
 
-function employeeHasAnyProjectAssignment(employeeId) {
+function employeeHasAssignmentOverlappingWindow(employeeId, winStart, winEnd) {
   if (!state) return false;
+  if (!winStart || !winEnd || winStart > winEnd) return false;
   const id = Number(employeeId);
-  return state.assignments.some((a) => Number(a.Employee_ID) === id);
+  return state.assignments.some((a) => {
+    if (Number(a.Employee_ID) !== id) return false;
+    return rangesOverlap(a.Startdatum, a.Enddatum, winStart, winEnd);
+  });
 }
 
-/** Wenn ein Projekt gewählt ist und die Checkbox „auch zugewiesene“ nicht aktiv: nur Personen ohne jede Projekt-Zuweisung. */
+/**
+ * Wenn ein Projekt gewählt ist und die Checkbox „auch zugewiesene“ nicht aktiv:
+ * Pool nur Personen ohne Zuweisung, deren Zeitraum sich mit dem Projektzeitraum überschneidet.
+ */
 function employeePoolRestrictsToUnassigned() {
   if (!state || state.projects.length === 0) return false;
   const projSel = /** @type {HTMLSelectElement | null} */ (document.getElementById("project-select"));
@@ -2578,10 +2585,15 @@ function employeePoolRestrictsToUnassigned() {
 function availableEmployeesForPool(filterQual) {
   if (!state) return [];
   const restrict = employeePoolRestrictsToUnassigned();
+  const projSel = /** @type {HTMLSelectElement | null} */ (document.getElementById("project-select"));
+  const proj = projSel?.value ? getProject(projSel.value) : undefined;
+  const winStart = proj?.Startdatum ?? "";
+  const winEnd = proj?.Enddatum ?? "";
+
   return state.employees.filter((e) => {
     if (e.Status !== "Verfügbar") return false;
     if (filterQual && e.Qualifikation !== filterQual) return false;
-    if (restrict && employeeHasAnyProjectAssignment(e.ID)) return false;
+    if (restrict && proj && employeeHasAssignmentOverlappingWindow(e.ID, winStart, winEnd)) return false;
     return true;
   });
 }
@@ -2594,7 +2606,7 @@ function renderEmployeePool() {
   const restrict = employeePoolRestrictsToUnassigned();
   const qualNote = qual ? ` · Qualifikation „${qual}“` : "";
   $("#employees-hint").textContent = restrict
-    ? `${emps.length} Person(en): verfügbar und in keinem Projekt zugewiesen${qualNote}.`
+    ? `${emps.length} Person(en): verfügbar und im Projektzeitraum ohne überschneidende Zuweisung${qualNote}.`
     : `${emps.length} Person(en) im Pool (nur Status „Verfügbar“)${qualNote}.`;
   list.innerHTML = emps
     .map(
