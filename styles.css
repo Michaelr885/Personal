@@ -665,8 +665,8 @@ code {
   font-weight: 600;
 }
 
-.panel--drop-hint {
-  margin-bottom: 1rem;
+.dashboard-absence-drop {
+  min-height: 5.5rem;
 }
 
 .project-drop-zones {

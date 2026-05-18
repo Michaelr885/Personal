@@ -660,7 +660,7 @@ function renderDashboard() {
           .map(
             (e) => {
               const absBlock = dashboardMemberAbsenceBlock(e);
-              return `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte ziehen">
+              return `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte oder nach „Abwesenheit melden“ ziehen">
             <span class="dashboard-emp-chip__name">${escapeHtml(e.Vorname)} ${escapeHtml(e.Nachname)}</span>
             <span class="tag-mini">${escapeHtml(e.Qualifikation)}</span>
             ${absBlock}
@@ -685,7 +685,7 @@ function renderDashboard() {
         .map((m) => {
           const absBlock = dashboardMemberAbsenceBlock(m);
           const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte oder „Ohne Teamleitung“ ziehen">
+          return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte, „Ohne Teamleitung“ oder „Abwesenheit melden“ ziehen">
             <div class="dashboard-emp-row__top">
             <span>${escapeHtml(m.Vorname)} ${escapeHtml(m.Nachname)} <span class="tag-mini">${escapeHtml(m.Qualifikation)}</span></span>
             <span>${
@@ -759,6 +759,15 @@ function renderDashboard() {
       ${unassignedChips}
     </div>
     <div class="grid-dashboard">${teamCards}</div>
+    <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
+      <div class="panel__head">
+        <h2><i class="fa-solid fa-user-injured"></i> Abwesenheit melden</h2>
+      </div>
+      <p class="hint">
+        Mitarbeitende aus einer Teamliste oder von „Ohne Teamleitung“ hierher ziehen. Anschließend wählen Sie
+        <strong>Krank</strong> oder <strong>Urlaub</strong> und den Zeitraum (erster und letzter freier Tag).
+      </p>
+    </div>
     <div class="panel">
       <div class="panel__head"><h2><i class="fa-solid fa-bed-pulse"></i> Abwesenheiten</h2></div>
       <p class="hint">Bei Krankheit oder Urlaub: Abwesenheitszeitraum und geplanter erster Arbeitstag (Rückkehr) stehen unten. Bei Status „Verfügbar“ erscheint auf den Teamkarten ab fünf Tage vor Urlaubs- oder Krankheitsbeginn ein Hinweis mit Datum.</p>
@@ -1151,6 +1160,8 @@ function closeAllModalsAndBackdrops() {
     "dnd-assign-modal",
     "assign-conflict-backdrop",
     "assign-conflict-modal",
+    "dash-abs-backdrop",
+    "dash-abs-modal",
   ];
   for (const id of ids) {
     const el = document.getElementById(id);
@@ -1673,6 +1684,124 @@ function setupFileLinking() {
   });
 }
 
+function dashAbsRangeHintText(status) {
+  if (status === "Krank") {
+    return "Wird in den Stammdaten unter Krankheit von/bis gespeichert. Geplanter Urlaub (Felder Urlaub) bleibt unverändert.";
+  }
+  return "Wird in den Stammdaten unter Urlaub von/bis gespeichert. Geplante Krankheit (Felder Krankheit) bleibt unverändert.";
+}
+
+function syncDashAbsRangeHint() {
+  const st = /** @type {HTMLSelectElement | null} */ ($("#dash-abs-status"));
+  const hint = /** @type {HTMLElement | null} */ ($("#dash-abs-range-hint"));
+  if (!st || !hint) return;
+  hint.textContent = dashAbsRangeHintText(st.value);
+}
+
+function closeDashboardAbsenceModal() {
+  const bd = document.getElementById("dash-abs-backdrop");
+  const md = document.getElementById("dash-abs-modal");
+  if (bd) bd.hidden = true;
+  if (md) md.hidden = true;
+}
+
+function openDashboardAbsenceModal(empId) {
+  if (!state) return;
+  const emp = getEmployee(empId);
+  if (!emp) return;
+  /** @type {HTMLInputElement} */ ($("#dash-abs-emp-id")).value = String(emp.ID);
+  const nameEl = document.getElementById("dash-abs-name");
+  if (nameEl) nameEl.textContent = `${emp.Vorname} ${emp.Nachname}`.trim();
+  const statusSel = /** @type {HTMLSelectElement | null} */ ($("#dash-abs-status"));
+  if (statusSel) {
+    statusSel.value = emp.Status === "Urlaub" ? "Urlaub" : "Krank";
+  }
+  const t = todayISO();
+  const vonEl = /** @type {HTMLInputElement | null} */ ($("#dash-abs-von"));
+  const bisEl = /** @type {HTMLInputElement | null} */ ($("#dash-abs-bis"));
+  if (emp.Status === "Krank" && emp.Krank_ab) {
+    if (vonEl) vonEl.value = String(emp.Krank_ab);
+    if (bisEl) bisEl.value = emp.Krank_bis ? String(emp.Krank_bis) : t;
+  } else if (emp.Status === "Urlaub" && emp.Urlaub_ab) {
+    if (vonEl) vonEl.value = String(emp.Urlaub_ab);
+    if (bisEl) bisEl.value = emp.Urlaub_bis ? String(emp.Urlaub_bis) : t;
+  } else {
+    if (vonEl) vonEl.value = t;
+    if (bisEl) bisEl.value = t;
+  }
+  syncDashAbsRangeHint();
+  const bd = document.getElementById("dash-abs-backdrop");
+  const md = document.getElementById("dash-abs-modal");
+  if (bd) bd.hidden = false;
+  if (md) md.hidden = false;
+  vonEl?.focus();
+}
+
+function setupDashboardAbsenceModal() {
+  const cancel = document.getElementById("dash-abs-cancel");
+  const bd = document.getElementById("dash-abs-backdrop");
+  const form = /** @type {HTMLFormElement | null} */ (document.getElementById("dash-abs-form"));
+  const statusSel = document.getElementById("dash-abs-status");
+  if (!cancel || !bd || !form || form.dataset.bound === "1") return;
+  form.dataset.bound = "1";
+  cancel.addEventListener("click", closeDashboardAbsenceModal);
+  bd.addEventListener("click", (ev) => {
+    if (ev.target === bd) closeDashboardAbsenceModal();
+  });
+  statusSel?.addEventListener("change", syncDashAbsRangeHint);
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!state) return;
+    const idRaw = /** @type {HTMLInputElement} */ ($("#dash-abs-emp-id")).value;
+    const empId = Number(idRaw);
+    if (!Number.isFinite(empId)) return;
+    const status = /** @type {"Krank" | "Urlaub"} */ (
+      /** @type {HTMLSelectElement} */ ($("#dash-abs-status")).value
+    );
+    const vAb = readOptionalISODateFromInput("#dash-abs-von");
+    const vBis = readOptionalISODateFromInput("#dash-abs-bis");
+    if (!vAb || !vBis) {
+      await openModal("Datum", "<div>Bitte „Von“ und „Bis“ ausfüllen.</div>", {
+        variant: "info",
+        confirmText: "Verstanden",
+      });
+      return;
+    }
+    if (vBis < vAb) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Bis“ darf nicht vor „Von“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    const idx = state.employees.findIndex((e) => Number(e.ID) === empId);
+    if (idx < 0) return;
+    recordUndoSnapshot();
+    const prev = state.employees[idx];
+    const next = /** @type {Employee} */ ({
+      ...prev,
+      Status: status,
+    });
+    if (status === "Krank") {
+      next.Krank_ab = vAb;
+      next.Krank_bis = vBis;
+    } else {
+      next.Urlaub_ab = vAb;
+      next.Urlaub_bis = vBis;
+    }
+    syncLegacyAbsenceFields(next);
+    state.employees[idx] = next;
+    await persist();
+    closeDashboardAbsenceModal();
+    renderDashboard();
+    renderPersonnelView();
+    if ($("#view-projects").classList.contains("view--active")) {
+      renderProjectsView();
+    }
+  });
+}
+
 let dashboardDnDActiveZone = null;
 
 function setupDashboardDnD() {
@@ -1705,7 +1834,7 @@ function setupDashboardDnD() {
   view.addEventListener("dragenter", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
     const zone = /** @type {HTMLElement | null} */ (
-      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+      el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
     if (!zone) return;
     ev.preventDefault();
@@ -1714,7 +1843,7 @@ function setupDashboardDnD() {
   view.addEventListener("dragover", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
     const zone = /** @type {HTMLElement | null} */ (
-      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+      el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
     if (!zone) return;
     ev.preventDefault();
@@ -1729,7 +1858,7 @@ function setupDashboardDnD() {
   view.addEventListener("dragleave", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
     const zone = /** @type {HTMLElement | null} */ (
-      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+      el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
     if (!zone) return;
     const rel = /** @type {Node | null} */ (ev.relatedTarget);
@@ -1741,6 +1870,18 @@ function setupDashboardDnD() {
 
   view.addEventListener("drop", async (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
+    const absZone = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-absence]"));
+    if (absZone && state) {
+      ev.preventDefault();
+      absZone.classList.remove("team-drop-zone--active");
+      if (dashboardDnDActiveZone === absZone) dashboardDnDActiveZone = null;
+      const empId =
+        ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
+      if (!empId) return;
+      if (!getEmployee(empId)) return;
+      openDashboardAbsenceModal(empId);
+      return;
+    }
     const zone = /** @type {HTMLElement | null} */ (
       el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
     );
@@ -1777,6 +1918,7 @@ function boot() {
   clearUndoHistory();
   setupNavigation();
   setupDashboardDnD();
+  setupDashboardAbsenceModal();
   setupProjectsInteractions();
   setupPersonnelInteractions();
   setupPersonnelTableActions();
