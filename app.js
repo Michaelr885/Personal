@@ -1918,6 +1918,161 @@ function setupDashboardAbsenceModal() {
 
 let dashboardDnDActiveZone = null;
 
+/** Entfernt Drop-Zonen-Hervorhebung (Maus- und Touch-Zug). */
+function clearDashboardDropZoneHighlight() {
+  if (dashboardDnDActiveZone) {
+    dashboardDnDActiveZone.classList.remove("team-drop-zone--active");
+    dashboardDnDActiveZone = null;
+  }
+}
+
+/**
+ * @param {string} empId
+ * @param {Element | null} targetEl Element unter dem Cursor bzw. dem Finger (drop target)
+ */
+async function dashboardHandleEmployeeDrop(empId, targetEl) {
+  if (!state) return;
+  const absZone = /** @type {HTMLElement | null} */ (targetEl?.closest("[data-drop-absence]"));
+  if (absZone) {
+    clearDashboardDropZoneHighlight();
+    if (!getEmployee(empId)) return;
+    openDashboardAbsenceModal(empId);
+    return;
+  }
+  const zone = /** @type {HTMLElement | null} */ (
+    targetEl?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+  );
+  if (!zone) {
+    clearDashboardDropZoneHighlight();
+    return;
+  }
+  clearDashboardDropZoneHighlight();
+  const emp = getEmployee(empId);
+  if (!emp) return;
+  if (zone.hasAttribute("data-drop-unassigned")) {
+    recordUndoSnapshot();
+    emp.Teamleiter_ID = null;
+  } else {
+    const tlId = zone.getAttribute("data-drop-teamleader");
+    if (!tlId || !getTeamLeader(tlId)) return;
+    if (Number(emp.Teamleiter_ID) === Number(tlId)) return;
+    recordUndoSnapshot();
+    emp.Teamleiter_ID = Number(tlId);
+  }
+  await persist();
+  renderDashboard();
+  if ($("#view-personnel").classList.contains("view--active")) {
+    renderPersonnelView();
+  }
+}
+
+/** Hebt die Zone unter (x,y) hervor (Touch-Zug). */
+function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
+  const el = document.elementFromPoint(clientX, clientY);
+  const zone = /** @type {HTMLElement | null} */ (
+    el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
+  );
+  if (dashboardDnDActiveZone && dashboardDnDActiveZone !== zone) {
+    dashboardDnDActiveZone.classList.remove("team-drop-zone--active");
+  }
+  dashboardDnDActiveZone = zone;
+  zone?.classList.add("team-drop-zone--active");
+}
+
+/** Touch-Zug für Dashboard (Smartphones ohne zuverlässiges HTML5-DnD). */
+function setupDashboardTouchDrag(view) {
+  if (view.dataset.dashboardTouch === "1") return;
+  view.dataset.dashboardTouch = "1";
+  const THRESH = 16;
+  /** @type {{ id: string | null; startX: number; startY: number; row: HTMLElement | null; active: boolean; touchId: number | null; moveDoc: ((ev: TouchEvent) => void) | null; endDoc: ((ev: TouchEvent) => void) | null }} */
+  const st = {
+    id: null,
+    startX: 0,
+    startY: 0,
+    row: null,
+    active: false,
+    touchId: null,
+    moveDoc: null,
+    endDoc: null,
+  };
+
+  function cleanupDocListeners() {
+    if (st.moveDoc) {
+      document.removeEventListener("touchmove", st.moveDoc);
+      st.moveDoc = null;
+    }
+    if (st.endDoc) {
+      document.removeEventListener("touchend", st.endDoc);
+      document.removeEventListener("touchcancel", st.endDoc);
+      st.endDoc = null;
+    }
+  }
+
+  function resetTouchDrag() {
+    cleanupDocListeners();
+    st.row?.classList.remove("dashboard-emp-dragging");
+    view.classList.remove("dashboard-view--touch-drag");
+    clearDashboardDropZoneHighlight();
+    st.id = null;
+    st.row = null;
+    st.active = false;
+    st.touchId = null;
+  }
+
+  view.addEventListener(
+    "touchstart",
+    (ev) => {
+      if (st.id != null) return;
+      const t = ev.targetTouches[0];
+      if (!t) return;
+      const row =
+        ev.target instanceof Element ? ev.target.closest("[data-dashboard-employee]") : null;
+      if (!(row instanceof HTMLElement)) return;
+      const id = row.getAttribute("data-dashboard-employee");
+      if (!id) return;
+      st.id = id;
+      st.touchId = t.identifier;
+      st.startX = t.clientX;
+      st.startY = t.clientY;
+      st.row = row;
+      st.active = false;
+
+      const onMove = (e) => {
+        const ti = [...e.touches].find((x) => x.identifier === st.touchId);
+        if (!ti || st.id == null) return;
+        const dx = ti.clientX - st.startX;
+        const dy = ti.clientY - st.startY;
+        if (!st.active) {
+          if (dx * dx + dy * dy < THRESH * THRESH) return;
+          st.active = true;
+          st.row?.classList.add("dashboard-emp-dragging");
+          view.classList.add("dashboard-view--touch-drag");
+        }
+        e.preventDefault();
+        dashboardHighlightDropZoneUnderPoint(ti.clientX, ti.clientY);
+      };
+
+      const onEnd = async (e) => {
+        const ti = [...e.changedTouches].find((x) => x.identifier === st.touchId);
+        const pendingId = st.id;
+        const wasActive = st.active;
+        resetTouchDrag();
+        if (!pendingId || !wasActive || !ti || !state) return;
+        await new Promise((r) => requestAnimationFrame(r));
+        const under = document.elementFromPoint(ti.clientX, ti.clientY);
+        await dashboardHandleEmployeeDrop(pendingId, under instanceof Element ? under : null);
+      };
+
+      st.moveDoc = onMove;
+      st.endDoc = onEnd;
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd, { passive: true });
+      document.addEventListener("touchcancel", onEnd, { passive: true });
+    },
+    { passive: true }
+  );
+}
+
 function setupDashboardDnD() {
   const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
   if (!view || view.dataset.dashboardDnd === "1") return;
@@ -1984,46 +2139,28 @@ function setupDashboardDnD() {
 
   view.addEventListener("drop", async (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
-    const absZone = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-absence]"));
-    if (absZone && state) {
-      ev.preventDefault();
-      absZone.classList.remove("team-drop-zone--active");
-      if (dashboardDnDActiveZone === absZone) dashboardDnDActiveZone = null;
-      const empId =
-        ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
-      if (!empId) return;
-      if (!getEmployee(empId)) return;
-      openDashboardAbsenceModal(empId);
-      return;
-    }
-    const zone = /** @type {HTMLElement | null} */ (
-      el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
-    );
-    if (!zone || !state) return;
     ev.preventDefault();
-    zone.classList.remove("team-drop-zone--active");
-    dashboardDnDActiveZone = null;
     const empId =
       ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
-    if (!empId) return;
-    const emp = getEmployee(empId);
-    if (!emp) return;
-    if (zone.hasAttribute("data-drop-unassigned")) {
-      recordUndoSnapshot();
-      emp.Teamleiter_ID = null;
+    if (!empId || !state) {
+      clearDashboardDropZoneHighlight();
+      return;
+    }
+    const absZone = /** @type {HTMLElement | null} */ (el?.closest("[data-drop-absence]"));
+    if (absZone) {
+      absZone.classList.remove("team-drop-zone--active");
+      if (dashboardDnDActiveZone === absZone) dashboardDnDActiveZone = null;
     } else {
-      const tlId = zone.getAttribute("data-drop-teamleader");
-      if (!tlId || !getTeamLeader(tlId)) return;
-      if (Number(emp.Teamleiter_ID) === Number(tlId)) return;
-      recordUndoSnapshot();
-      emp.Teamleiter_ID = Number(tlId);
+      const zone = /** @type {HTMLElement | null} */ (
+        el?.closest("[data-drop-teamleader], [data-drop-unassigned]")
+      );
+      zone?.classList.remove("team-drop-zone--active");
+      dashboardDnDActiveZone = null;
     }
-    await persist();
-    renderDashboard();
-    if ($("#view-personnel").classList.contains("view--active")) {
-      renderPersonnelView();
-    }
+    await dashboardHandleEmployeeDrop(empId, el);
   });
+
+  setupDashboardTouchDrag(view);
 }
 
 function boot() {

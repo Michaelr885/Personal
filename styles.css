@@ -333,8 +333,8 @@ code {
   -webkit-user-select: none;
 }
 
-.dashboard-emp-dragging {
-  opacity: 0.45;
+#view-dashboard.dashboard-view--touch-drag {
+  touch-action: none;
 }
 
 .card-team li[draggable="true"] {
