@@ -5,7 +5,7 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Zertifikat_Gültig_Bis:string }} Employee */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -117,20 +117,93 @@ function employeeActiveOnProjectToday(empId) {
   );
 }
 
-function certificateWarningDays(certDateStr) {
-  const end = parseISODate(certDateStr);
+/** Kalendertage bis zum Zieldatum (heute → Ziel); negativ = Datum liegt in der Vergangenheit. */
+function daysUntilISODate(isoStr) {
+  if (isoStr == null || isoStr === "") return null;
+  const end = parseISODate(String(isoStr));
+  if (Number.isNaN(end.getTime())) return null;
   const start = parseISODate(todayISO());
-  const diffMs = end - start;
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 }
 
-function addDaysISO(isoDate, days) {
-  const d = new Date(`${isoDate}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+/** Krank/Urlaub: Rückkehr-Hinweis fürs Dashboard (HTML). */
+function absenceReturnBadgeHtml(emp) {
+  if (emp.Status !== "Krank" && emp.Status !== "Urlaub") return "";
+  const raw = emp.Rückkehr_erwartet_am;
+  if (raw == null || raw === "") {
+    return `<span class="tag-mini" title="Rückkehrdatum in der Personalverwaltung eintragen">kein Rückkehrdatum</span>`;
+  }
+  const d = daysUntilISODate(raw);
+  if (d === null || !Number.isFinite(d)) return "";
+  if (d < 0) {
+    return `<span class="warn-abs" title="Erwartete Rückkehr war ${escapeHtml(String(raw))}"><i class="fa-solid fa-circle-xmark"></i> Rückkehr überfällig</span>`;
+  }
+  if (d === 0) {
+    return `<span class="warn-abs" title="Rückkehr heute"><i class="fa-solid fa-triangle-exclamation"></i> Rückkehr heute</span>`;
+  }
+  const urgent = d < 30;
+  const cls = urgent ? "warn-abs" : "tag-mini";
+  const icon = urgent ? "fa-triangle-exclamation" : "fa-calendar-check";
+  return `<span class="${cls}" title="Erwartete Rückkehr ${escapeHtml(String(raw))}"><i class="fa-solid ${icon}"></i> in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+}
+
+/** Verfügbar: ab 5 Tage vor geplantem Abwesenheitsbeginn Hinweis (HTML). */
+function plannedAbsenceBadgeHtml(emp) {
+  if (emp.Status !== "Verfügbar") return "";
+  const von = emp.Abwesenheit_geplant_ab;
+  if (von == null || von === "") return "";
+  const d = daysUntilISODate(von);
+  if (d === null || !Number.isFinite(d)) return "";
+  if (d < 0) return "";
+  if (d > 5) return "";
+  const bis = emp.Abwesenheit_geplant_bis;
+  const titleExtra = bis && bis !== von ? ` bis ${escapeHtml(String(bis))}` : "";
+  return `<span class="warn-abs" title="Geplante Abwesenheit ab ${escapeHtml(String(von))}${titleExtra}"><i class="fa-solid fa-plane-departure"></i> Abwesenheit in ${d} Tag${d === 1 ? "" : "en"}</span>`;
+}
+
+/** Fließtext für Personal-Tabelle (ohne HTML). */
+function absenceSummaryPlain(emp) {
+  const parts = [];
+  if (emp.Status === "Krank" || emp.Status === "Urlaub") {
+    const raw = emp.Rückkehr_erwartet_am;
+    if (raw == null || raw === "") parts.push("Rückkehr: —");
+    else {
+      const d = daysUntilISODate(raw);
+      if (d === null || !Number.isFinite(d)) parts.push(`Rückkehr: ${raw}`);
+      else if (d < 0) parts.push(`Rückkehr überfällig (${raw})`);
+      else if (d === 0) parts.push("Rückkehr heute");
+      else parts.push(`Rückkehr in ${d} Tagen (${raw})`);
+    }
+  }
+  if (emp.Status === "Verfügbar") {
+    const von = emp.Abwesenheit_geplant_ab;
+    if (von) {
+      const d = daysUntilISODate(von);
+      if (d !== null && Number.isFinite(d) && d >= 0 && d <= 5) {
+        parts.push(`Abwesenheit ab ${von} in ${d} T.`);
+      } else if (d !== null && Number.isFinite(d) && d > 5) {
+        parts.push(`Geplant ab ${von}`);
+      }
+    }
+  }
+  return parts.length ? parts.join(" · ") : "—";
+}
+
+/** Eine Zeile für den Ressourcen-Pool unter der Person. */
+function plannedAbsencePoolLine(emp) {
+  if (emp.Status !== "Verfügbar") return "";
+  const von = emp.Abwesenheit_geplant_ab;
+  if (von == null || von === "") return "";
+  const d = daysUntilISODate(von);
+  if (d === null || !Number.isFinite(d) || d < 0 || d > 5) return "";
+  return `Abwesenheit ab ${von} · in ${d} Tag${d === 1 ? "" : "en"}`;
+}
+
+function readOptionalISODateFromInput(id) {
+  const el = /** @type {HTMLInputElement | null} */ ($(id));
+  if (!el) return null;
+  const v = el.value.trim();
+  return v === "" ? null : v;
 }
 
 function escapeHtml(str) {
@@ -329,13 +402,7 @@ function renderDashboard() {
       ).length;
       const items = members
         .map((m) => {
-          const certDays = certificateWarningDays(m.Zertifikat_Gültig_Bis);
-          const certWarn =
-            certDays < 30 && certDays >= 0
-              ? `<span class="warn-cert" title="Zertifikat läuft bald ab"><i class="fa-solid fa-triangle-exclamation"></i> ${certDays} Tage</span>`
-              : certDays < 0
-                ? `<span class="warn-cert"><i class="fa-solid fa-circle-xmark"></i> abgelaufen</span>`
-                : "";
+          const absenceBadges = `${absenceReturnBadgeHtml(m)} ${plannedAbsenceBadgeHtml(m)}`.trim();
           const onProject = employeeActiveOnProjectToday(m.ID);
           return `<li draggable="true" data-dashboard-employee="${m.ID}" title="Zu anderer Teamleitung oder in „Ohne Teamleitung“ ziehen">
             <span>${m.Vorname} ${m.Nachname} <span class="tag-mini">${m.Qualifikation}</span></span>
@@ -343,7 +410,7 @@ function renderDashboard() {
               onProject
                 ? '<span class="badge">im Projekt</span>'
                 : '<span class="badge badge--muted">frei</span>'
-            } ${certWarn}</span>
+            } ${absenceBadges}</span>
           </li>`;
         })
         .join("");
@@ -363,13 +430,14 @@ function renderDashboard() {
     absences.length === 0
       ? '<p class="hint">Keine Abwesenheiten erfasst.</p>'
       : `<ul class="absence-list">${absences
-          .map((e) => {
-            const pill =
-              e.Status === "Krank"
-                ? '<span class="pill pill--krank">Krank</span>'
-                : '<span class="pill pill--urlaub">Urlaub</span>';
-            return `<li><span>${e.Vorname} ${e.Nachname}</span>${pill}</li>`;
-          })
+      .map((e) => {
+        const pill =
+          e.Status === "Krank"
+            ? '<span class="pill pill--krank">Krank</span>'
+            : '<span class="pill pill--urlaub">Urlaub</span>';
+        const ret = absenceReturnBadgeHtml(e);
+        return `<li><span>${e.Vorname} ${e.Nachname} ${pill}<br>${ret || '<span class="hint">Rückkehrdatum nicht gesetzt</span>'}</span></li>`;
+      })
           .join("")}</ul>`;
 
   const available = state.employees.filter((e) => e.Status === "Verfügbar");
@@ -595,13 +663,20 @@ function renderEmployeePool() {
   $("#employees-hint").textContent = `${emps.length} Person(en) im Pool (nur Status „Verfügbar“).`;
   list.innerHTML = emps
     .map(
-      (e) => `<div class="employee-card" draggable="true" data-id="${e.ID}">
+      (e) => {
+        const planLine = plannedAbsencePoolLine(e);
+        const planHtml = planLine
+          ? `<div class="hint" style="margin-top:0.2rem">${escapeHtml(planLine)}</div>`
+          : "";
+        return `<div class="employee-card" draggable="true" data-id="${e.ID}">
       <div>
         <div class="name">${e.Vorname} ${e.Nachname}</div>
         <div class="hint">${e.Qualifikation} · ${e.Personalnummer}</div>
+        ${planHtml}
       </div>
       <i class="fa-solid fa-grip-lines-vertical" aria-hidden="true"></i>
-    </div>`
+    </div>`;
+      }
     )
     .join("");
 }
@@ -907,7 +982,7 @@ function renderPersonnelTable() {
         <td>${e.Qualifikation}</td>
         <td>${tl ? escapeHtml(tl.Name) : "Keine"}</td>
         <td class="${sc}">${e.Status}</td>
-        <td>${e.Zertifikat_Gültig_Bis}</td>
+        <td class="hint">${escapeHtml(absenceSummaryPlain(e))}</td>
         <td class="actions-cell">
           <button type="button" class="btn btn--icon btn--ghost" data-edit="${e.ID}" title="Bearbeiten" aria-label="Bearbeiten"><i class="fa-solid fa-pen"></i></button>
           <button type="button" class="btn btn--icon btn--delete-icon" data-delete="${e.ID}" title="Löschen" aria-label="Löschen"><i class="fa-solid fa-trash-can"></i></button>
@@ -958,7 +1033,9 @@ function loadEmployeeIntoForm(id) {
       ? String(e.Teamleiter_ID)
       : "";
   /** @type {HTMLSelectElement} */ ($("#emp-status")).value = e.Status;
-  /** @type {HTMLInputElement} */ ($("#emp-cert")).value = e.Zertifikat_Gültig_Bis;
+  /** @type {HTMLInputElement} */ ($("#emp-rueck")).value = e.Rückkehr_erwartet_am ?? "";
+  /** @type {HTMLInputElement} */ ($("#emp-plan-ab")).value = e.Abwesenheit_geplant_ab ?? "";
+  /** @type {HTMLInputElement} */ ($("#emp-plan-bis")).value = e.Abwesenheit_geplant_bis ?? "";
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
 }
@@ -1031,6 +1108,16 @@ function setupPersonnelInteractions() {
       .map((s) => s.trim())
       .filter(Boolean);
     const tlRaw = /** @type {HTMLSelectElement} */ ($("#emp-tl")).value;
+    const planAb = readOptionalISODateFromInput("#emp-plan-ab");
+    const planBis = readOptionalISODateFromInput("#emp-plan-bis");
+    if (planAb && planBis && planBis < planAb) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const payload = {
       Personalnummer: /** @type {HTMLInputElement} */ ($("#emp-pnr")).value.trim(),
       Vorname: /** @type {HTMLInputElement} */ ($("#emp-vorname")).value.trim(),
@@ -1039,7 +1126,9 @@ function setupPersonnelInteractions() {
       Zusatz_Tags: tags,
       Teamleiter_ID: tlRaw === "" ? null : Number(tlRaw),
       Status: /** @type {HTMLSelectElement} */ ($("#emp-status")).value,
-      Zertifikat_Gültig_Bis: /** @type {HTMLInputElement} */ ($("#emp-cert")).value,
+      Rückkehr_erwartet_am: readOptionalISODateFromInput("#emp-rueck"),
+      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#emp-plan-ab"),
+      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#emp-plan-bis"),
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
     if (idx >= 0) {
@@ -1057,6 +1146,16 @@ function setupPersonnelInteractions() {
   $("#new-employee-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     if (!state) return;
+    const planAbNew = readOptionalISODateFromInput("#new-emp-plan-ab");
+    const planBisNew = readOptionalISODateFromInput("#new-emp-plan-bis");
+    if (planAbNew && planBisNew && planBisNew < planAbNew) {
+      await openModal(
+        "Datum prüfen",
+        "<div>„Geplante Abwesenheit bis“ darf nicht vor „Geplant ab“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const newEmp = {
       ID: nextId(state.employees),
       Personalnummer: /** @type {HTMLInputElement} */ ($("#new-emp-pnr")).value.trim(),
@@ -1069,7 +1168,9 @@ function setupPersonnelInteractions() {
       })(),
       Status: /** @type {HTMLSelectElement} */ ($("#new-emp-status")).value,
       Zusatz_Tags: [],
-      Zertifikat_Gültig_Bis: addDaysISO(todayISO(), 365),
+      Rückkehr_erwartet_am: readOptionalISODateFromInput("#new-emp-rueck"),
+      Abwesenheit_geplant_ab: readOptionalISODateFromInput("#new-emp-plan-ab"),
+      Abwesenheit_geplant_bis: readOptionalISODateFromInput("#new-emp-plan-bis"),
     };
     state.employees.push(newEmp);
     await persist();

@@ -235,7 +235,7 @@
                       <th>Qualifikation</th>
                       <th>Teamleitung</th>
                       <th>Status</th>
-                      <th>Zertifikat bis</th>
+                      <th>Abwesenheit / Plan</th>
                       <th>Aktionen</th>
                     </tr>
                   </thead>
@@ -277,6 +277,23 @@
                     <option>Urlaub</option>
                   </select>
                 </label>
+                <label>
+                  Erwartete Rückkehr (bei Krank/Urlaub, optional)
+                  <input type="date" id="new-emp-rueck" />
+                </label>
+                <label>
+                  Geplante Abwesenheit ab (optional)
+                  <input type="date" id="new-emp-plan-ab" />
+                </label>
+                <label>
+                  Geplante Abwesenheit bis (optional)
+                  <input type="date" id="new-emp-plan-bis" />
+                </label>
+                <p class="hint span-2">
+                  Bei Status <strong>Verfügbar</strong> erscheint ab fünf Tage vor „Abwesenheit ab“ ein Hinweis im
+                  Dashboard und im Ressourcen-Pool. Bei <strong>Krank</strong> oder <strong>Urlaub</strong> nutzen Sie
+                  „Erwartete Rückkehr“ für die Tages-Anzeige bis zur Rückkehr.
+                </p>
                 <div class="form-actions span-2">
                   <button type="submit" class="btn btn--primary">
                     <i class="fa-solid fa-user-plus"></i> Mitarbeiter anlegen
@@ -292,7 +309,7 @@
                 </h2>
               </div>
               <p class="hint" id="edit-form-hint">
-                Wählen Sie in der Tabelle das Stift-Symbol, um Stammdaten (inkl. Zertifikat und Tags) zu
+                Wählen Sie in der Tabelle das Stift-Symbol, um Stammdaten (inkl. Tags und Abwesenheitsdaten) zu
                 bearbeiten.
               </p>
               <form id="employee-form" class="form-grid form-grid--wide">
@@ -330,9 +347,21 @@
                   </select>
                 </label>
                 <label>
-                  Zertifikat gültig bis
-                  <input type="date" id="emp-cert" required />
+                  Erwartete Rückkehr (bei Krank/Urlaub, optional)
+                  <input type="date" id="emp-rueck" />
                 </label>
+                <label>
+                  Geplante Abwesenheit ab (optional)
+                  <input type="date" id="emp-plan-ab" />
+                </label>
+                <label>
+                  Geplante Abwesenheit bis (optional)
+                  <input type="date" id="emp-plan-bis" />
+                </label>
+                <p class="hint span-2">
+                  Ab fünf Tage vor „Geplant ab“ erscheint ein Hinweis bei verfügbaren Personen. Bei Krank/Urlaub
+                  zeigt die App die Tage bis zur erwarteten Rückkehr.
+                </p>
                 <div class="form-actions span-2">
                   <button type="submit" class="btn btn--primary">
                     <i class="fa-solid fa-save"></i> Speichern
