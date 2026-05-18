@@ -736,7 +736,8 @@ function renderGanttCore() {
   try {
     ganttInstance = new GanttCtor("#gantt-anchor", tasks, {
       view_mode: "Month",
-      language: "de",
+      // frappe-gantt 0.6.1: keine Locale "de" (month_names) → sonst TypeError in date_utils
+      language: "en",
       date_format: "YYYY-MM-DD",
     });
   } catch (err) {
