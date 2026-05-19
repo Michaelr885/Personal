@@ -4203,6 +4203,7 @@ function setupFileLinking() {
     try {
       const data = await linkLocalDataFile();
       state = data;
+      normalizeAllEmployeesShape();
       clearUndoHistory();
       await runAutoStatusSyncAndPersist();
       meta.textContent = `Aktiv: ${getLinkedFileName()} · Daten geladen`;
