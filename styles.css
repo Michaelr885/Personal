@@ -1515,6 +1515,25 @@ textarea {
   color: var(--muted);
 }
 
+/* 24./30. Dezember: betrieblich frei (eigene Farbe, nicht Urlaubstag) */
+.urlaub-plan__colbg--betrieb:not(.urlaub-plan__colbg--we) {
+  background: rgba(13, 148, 136, 0.22);
+}
+
+.urlaub-plan__colbg--betrieb.urlaub-plan__colbg--we {
+  background: rgba(13, 148, 136, 0.3);
+}
+
+.urlaub-plan__head-col--betrieb:not(.urlaub-plan__head-col--we) {
+  background: rgba(13, 148, 136, 0.28);
+  color: #0f766e;
+}
+
+.urlaub-plan__head-col--betrieb.urlaub-plan__head-col--we {
+  background: rgba(13, 148, 136, 0.34);
+  color: #115e59;
+}
+
 .urlaub-plan__head-day {
   display: block;
   font-weight: 700;

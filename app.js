@@ -875,15 +875,33 @@ function isHessenPublicHolidayISO(iso) {
   return hessenHolidayNameDE(iso) != null;
 }
 
-/** Mo–Fr ohne hessische gesetzliche Feiertage (Urlaubsstatistik). */
+/** 24. und 30. Dezember: betrieblich frei (kein gesetzlicher Feiertag), zählen nicht als Urlaubs-Arbeitstag. */
+function isBetrieblichFreierDezemberTagISO(iso) {
+  const key = String(iso).slice(0, 10);
+  if (key.length < 10) return false;
+  const mm = key.slice(5, 7);
+  const dd = key.slice(8, 10);
+  return mm === "12" && (dd === "24" || dd === "30");
+}
+
+/** @param {string} iso */
+function betrieblichFreierDezemberTagLabelDE(iso) {
+  if (!isBetrieblichFreierDezemberTagISO(iso)) return null;
+  return String(iso).slice(8, 10) === "24"
+    ? "24. Dezember · betrieblich frei"
+    : "30. Dezember · betrieblich frei";
+}
+
+/** Mo–Fr ohne hessische gesetzliche Feiertage und ohne betrieblich freie Dez.-Tage (Urlaubsstatistik). */
 function countsAsUrlaubArbeitstag(iso) {
+  if (isBetrieblichFreierDezemberTagISO(iso)) return false;
   const d = parseISODate(String(iso));
   const w = d.getDay();
   if (w === 0 || w === 6) return false;
   return !isHessenPublicHolidayISO(iso);
 }
 
-/** Arbeitstage im ISO-Inklusivbereich [isoStart, isoEnd] (Hessen). */
+/** Arbeitstage im ISO-Inklusivbereich [isoStart, isoEnd] (Hessen, ohne 24./30. Dez. betrieblich frei). */
 function countUrlaubWorkdaysInInclusiveRange(isoStart, isoEnd) {
   let c = 0;
   let cur = isoStart;
@@ -957,7 +975,7 @@ function mergeInclusiveUrlaubClips(/** @type {{ start: string; end: string }[]} 
   return out;
 }
 
-/** Urlaubs-Arbeitstage (Hessen: Mo–Fr ohne gesetzliche Feiertage) im Fenster [winStart, winEnd]. */
+/** Urlaubs-Arbeitstage (Hessen: Mo–Fr ohne gesetzliche Feiertage, ohne 24./30. Dez. betrieblich frei) im Fenster [winStart, winEnd]. */
 function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
   /** @type {{ start: string; end: string }[]} */
   const clips = [];
@@ -1079,6 +1097,7 @@ function renderUrlaubPlan() {
     const w = dt.getDay();
     const isWe = w === 0 || w === 6;
     const hName = hessenHolidayNameDE(iso);
+    const betriebFrei = betrieblichFreierDezemberTagLabelDE(iso);
     const shortD = dt.toLocaleDateString("de-DE", { weekday: "short" });
     const titleBase = dt.toLocaleDateString("de-DE", {
       weekday: "long",
@@ -1086,11 +1105,15 @@ function renderUrlaubPlan() {
       month: "long",
       year: "numeric",
     });
-    const title = hName ? `${titleBase} · ${hName}` : titleBase;
+    const titleParts = [titleBase];
+    if (hName) titleParts.push(hName);
+    if (betriebFrei) titleParts.push(betriebFrei);
+    const title = titleParts.join(" · ");
     const cls = [
       "urlaub-plan__head-col",
       isWe ? "urlaub-plan__head-col--we" : "",
       hName ? "urlaub-plan__head-col--holiday" : "",
+      betriebFrei ? "urlaub-plan__head-col--betrieb" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -1103,6 +1126,7 @@ function renderUrlaubPlan() {
       "urlaub-plan__colbg",
       isWe ? "urlaub-plan__colbg--we" : "",
       hName ? "urlaub-plan__colbg--holiday" : "",
+      betriebFrei ? "urlaub-plan__colbg--betrieb" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -1202,7 +1226,7 @@ function renderUrlaubPlan() {
             </button>
           </span>
         </h3>
-        <p class="hint">Arbeitstage Hessen (ohne Sa/So, ohne gesetzliche Feiertage in Hessen) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
+        <p class="hint">Arbeitstage Hessen (ohne Sa/So, ohne gesetzliche Feiertage in Hessen, ohne 24./30. Dezember betrieblich frei) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
         <div class="table-wrap urlaub-year-table-wrap">
           <table class="data-table urlaub-summary-table urlaub-year-table">
             <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
