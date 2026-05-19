@@ -1968,6 +1968,11 @@ function computeAutoStatusForEmployee(emp, dayISO) {
   const inU = isDayInAnyUrlaubRange(dayISO, emp);
   if (inK) return "Krank";
   if (inU) return "Urlaub";
+  /* Krank eingetragen, aber Krankheit beginnt erst später: wie Urlaub nicht als abwesend zählen */
+  const kAb = emp.Krank_ab != null && emp.Krank_ab !== "" ? String(emp.Krank_ab).trim() : "";
+  if (emp.Status === "Krank" && kAb && dayISO < kAb) {
+    return "Verfügbar";
+  }
   if (emp.Status === "Krank" && emp.Krank_ab && isDayAfterClosedAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) {
     return "Verfügbar";
   }
@@ -1985,6 +1990,7 @@ function syncEmployeeStatusesFromAbsenceDates(dayISO = todayISO()) {
     const next = computeAutoStatusForEmployee(emp, dayISO);
     if (next !== emp.Status) {
       emp.Status = next;
+      syncLegacyAbsenceFields(emp);
       changed = true;
     }
   }
