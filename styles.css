@@ -1652,3 +1652,156 @@ textarea {
   grid-column: unset;
   padding: 0.75rem 0.5rem;
 }
+
+/* ——— Sidebar: Bundesland + Theme ——— */
+.sidebar__prefs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.sidebar__pref-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
+
+.sidebar__select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.38rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.85);
+  color: #f1f5f9;
+}
+
+.btn--sidebar-secondary {
+  width: 100%;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.48rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(30, 41, 59, 0.65);
+  color: #e2e8f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn--sidebar-secondary:hover {
+  background: rgba(51, 65, 85, 0.9);
+}
+
+/* ——— Undo/Redo Toasts ——— */
+.toast-stack {
+  position: fixed;
+  bottom: 1.1rem;
+  right: 1.1rem;
+  z-index: 10050;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: none;
+  min-width: 210px;
+  max-width: min(380px, calc(100vw - 2rem));
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.toast--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast--history {
+  background: var(--primary-soft);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1e3a8a;
+}
+
+/* ——— Dark Mode ——— */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --border: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --primary: #60a5fa;
+  --primary-soft: rgba(96, 165, 250, 0.16);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  --status-verfügbar: #4ade80;
+  --status-verfügbar-soft: rgba(74, 222, 128, 0.16);
+  --status-krank: #f87171;
+  --status-krank-soft: rgba(248, 113, 113, 0.14);
+  --status-urlaub: #60a5fa;
+  --status-urlaub-soft: rgba(96, 165, 250, 0.2);
+  --team-fallback: #94a3b8;
+}
+
+:root[data-theme="dark"] code {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+:root[data-theme="dark"] .toast--history {
+  background: rgba(30, 58, 138, 0.95);
+  border-color: #3b82f6;
+  color: #eff6ff;
+}
+
+:root[data-theme="dark"] .gantt .grid-header,
+:root[data-theme="dark"] .gantt .lower-text,
+:root[data-theme="dark"] .gantt .upper-text {
+  fill: var(--muted);
+}
+
+:root[data-theme="dark"] .gantt .grid-row {
+  fill: #334155;
+}
+
+:root[data-theme="dark"] .gantt .row-line {
+  stroke: #475569;
+}
+
+:root[data-theme="dark"] .gantt .tick {
+  stroke: #475569;
+}
+
+:root[data-theme="dark"] .gantt .today-highlight {
+  stroke: var(--primary);
+}
+
+:root[data-theme="dark"] #gantt-container .gantt-container {
+  background: var(--surface);
+}
