@@ -11,13 +11,58 @@ import {
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
 
-const QUALIFICATIONS = [
+/** Vorgabe-Liste, wenn in der Datei noch keine `qualifications` gepflegt sind. */
+const DEFAULT_QUALIFICATIONS = [
   "Monteur",
   "Schweißer",
   "Bauleiter",
   "Elektriker",
   "Lagerist",
 ];
+
+/** Bekannte Qualifikationen → Farbton (HSL Hue 0–360); unbekannte Werte stabil aus dem Namen. */
+function empQualHue(qual) {
+  const q = String(qual ?? "").trim();
+  if (!q) return 210;
+  const map = /** @type {Record<string, number>} */ ({
+    Monteur: 204,
+    Schweißer: 24,
+    Bauleiter: 152,
+    Elektriker: 268,
+    Lagerist: 43,
+    Ausmesser: 172,
+  });
+  if (Object.prototype.hasOwnProperty.call(map, q)) return map[q];
+  let h = 0;
+  for (let i = 0; i < q.length; i++) h = (h * 31 + q.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function ensureStateQualifications() {
+  if (!state) return;
+  const used = new Set(DEFAULT_QUALIFICATIONS);
+  for (const e of state.employees) {
+    const q = String(e.Qualifikation ?? "").trim();
+    if (q) used.add(q);
+  }
+  for (const p of state.projects) {
+    for (const k of Object.keys(p.Benötigte_Qualifikationen || {})) {
+      const q = String(k).trim();
+      if (q) used.add(q);
+    }
+  }
+  const raw = Array.isArray(state.qualifications) ? state.qualifications : [];
+  const defined = raw.map((x) => String(x ?? "").trim()).filter(Boolean);
+  if (defined.length === 0) {
+    state.qualifications = [...used].sort((a, b) => a.localeCompare(b, "de"));
+    return;
+  }
+  for (const q of used) {
+    if (!defined.includes(q)) defined.push(q);
+  }
+  defined.sort((a, b) => a.localeCompare(b, "de"));
+  state.qualifications = defined;
+}
 
 const BESCHÄFTIGUNG_AÜG = "AÜG";
 const BESCHÄFTIGUNG_EIGENE = "Eigene";
@@ -70,9 +115,10 @@ function normalizeAllEmployeesShape() {
     emp.Abteilung = normalizeAbteilung(emp.Abteilung);
     emp.Urlaub_perioden = normalizeUrlaubPerioden(emp.Urlaub_perioden);
   }
+  ensureStateQualifications();
 }
 
-/** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[] } | null} */
+/** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[], qualifications: string[] } | null} */
 let state = null;
 
 const UNDO_HISTORY_LIMIT = 80;
@@ -1340,7 +1386,7 @@ function renderUrlaubPlan() {
       : '<span class="hint urlaub-plan__empty">kein Urlaub</span>';
     const name = `${escapeHtml(emp.Nachname)}, ${escapeHtml(emp.Vorname)}`;
     return `<div class="urlaub-plan__row">
-      <div class="urlaub-plan__namecell">${name}</div>
+      <div class="urlaub-plan__namecell emp-qual-surface" style="--qh:${empQualHue(emp.Qualifikation)}">${name}</div>
       <div class="urlaub-plan__track urlaub-plan--daylines urlaub-plan__track--pick" style="--urlaub-d:${days}; --urlaub-rows:${maxRow}" data-urlaub-emp="${emp.ID}" data-urlaub-days="${days}" data-urlaub-y="${y}" data-urlaub-m0="${m}" title="Freie Fläche: neuen Urlaub eintragen · Balken: bestehenden Zeitraum bearbeiten">${trackColBgsHtml}${bars}</div>
     </div>`;
   });
@@ -1361,7 +1407,7 @@ function renderUrlaubPlan() {
       }
       const yTotal = countVacationDaysInWindow(emp, `${y}-01-01`, `${y}-12-31`);
       return `<tr>
-        <td>${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td>
+        <td class="emp-qual-surface" style="--qh:${empQualHue(emp.Qualifikation)}">${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td>
         ${cells.join("")}
         <td class="urlaub-summary__num urlaub-summary__num--sum">${yTotal}</td>
       </tr>`;
@@ -2075,7 +2121,7 @@ function renderDashboard() {
           .map(
             (e) => {
               const absBlock = dashboardMemberAbsenceBlock(e);
-              return `<div class="dashboard-emp-chip" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte oder nach „Abwesenheit melden“ ziehen">
+              return `<div class="dashboard-emp-chip emp-qual-surface" style="--qh:${empQualHue(e.Qualifikation)}" draggable="true" data-dashboard-employee="${e.ID}" title="Auf eine Teamkarte oder nach „Abwesenheit melden“ ziehen">
             <span class="dashboard-emp-chip__name">${escapeHtml(e.Vorname)} ${escapeHtml(e.Nachname)}</span>
             <span class="tag-mini">${escapeHtml(e.Qualifikation)}</span>
             ${absBlock}
@@ -2100,7 +2146,7 @@ function renderDashboard() {
       .map((m) => {
         const absBlock = dashboardMemberAbsenceBlock(m);
         const onProject = employeeActiveOnProjectToday(m.ID);
-        return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte, „Ohne Teamleitung“ oder „Abwesenheit melden“ ziehen">
+        return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row emp-qual-surface" style="--qh:${empQualHue(m.Qualifikation)}" title="Auf andere Teamkarte, „Ohne Teamleitung“ oder „Abwesenheit melden“ ziehen">
             <div class="dashboard-emp-row__top">
             <span>${escapeHtml(m.Vorname)} ${escapeHtml(m.Nachname)} <span class="tag-mini">${escapeHtml(m.Qualifikation)}</span></span>
             <span>${
@@ -2170,7 +2216,7 @@ function renderDashboard() {
               : '<span class="pill pill--urlaub">Urlaub</span>';
           const period = activeAbsencePeriodHtml(e);
           const ret = absenceReturnBadgeHtml(e);
-          return `<li class="absence-list__item">
+          return `<li class="absence-list__item emp-qual-surface" style="--qh:${empQualHue(e.Qualifikation)}">
           <div class="absence-list__head">
             <strong>${escapeHtml(`${e.Vorname} ${e.Nachname}`)}</strong> ${pill}
           </div>
@@ -2199,7 +2245,7 @@ function renderDashboard() {
           preLine = `<div class="absence-list__line"><span class="hint">Laut Plan heute abwesend – Status ggf. auf „${escapeHtml(win.kind)}“ setzen</span></div>`;
         }
         const ret = plannedVerfügbarReturnLineHtml(win.ab, win.bis, win.kind);
-        return `<li class="absence-list__item absence-list__item--geplant">
+        return `<li class="absence-list__item absence-list__item--geplant emp-qual-surface" style="--qh:${empQualHue(e.Qualifikation)}">
           <div class="absence-list__head">
             <strong>${escapeHtml(`${e.Vorname} ${e.Nachname}`)}</strong> ${dem} ${pillKind}
           </div>
@@ -2770,12 +2816,22 @@ function openProjectModal(proj) {
 
 function uniqueQualifications() {
   if (!state) return [];
-  const set = new Set(QUALIFICATIONS);
-  state.employees.forEach((e) => set.add(e.Qualifikation));
-  state.projects.forEach((p) => {
-    Object.keys(p.Benötigte_Qualifikationen || {}).forEach((k) => set.add(k));
+  const set = new Set(
+    (Array.isArray(state.qualifications) ? state.qualifications : [])
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean)
+  );
+  state.employees.forEach((e) => {
+    const q = String(e.Qualifikation ?? "").trim();
+    if (q) set.add(q);
   });
-  return [...set].sort();
+  state.projects.forEach((p) => {
+    Object.keys(p.Benötigte_Qualifikationen || {}).forEach((k) => {
+      const q = String(k).trim();
+      if (q) set.add(q);
+    });
+  });
+  return [...set].sort((a, b) => a.localeCompare(b, "de"));
 }
 
 /** Eine Zeile im Qualifikations-Editor anhängen. */
@@ -2913,7 +2969,7 @@ function renderEmployeePool() {
         const planHtml = planLine
           ? `<div class="hint" style="margin-top:0.2rem">${escapeHtml(planLine)}</div>`
           : "";
-        return `<div class="employee-card" draggable="true" data-id="${e.ID}">
+        return `<div class="employee-card emp-qual-surface" style="--qh:${empQualHue(e.Qualifikation)}" draggable="true" data-id="${e.ID}">
       <div>
         <div class="name">${e.Vorname} ${e.Nachname}</div>
         <div class="hint">${e.Qualifikation} · ${e.Personalnummer}</div>
@@ -3412,6 +3468,158 @@ function renderTeamLeadersTable() {
   });
 }
 
+/** @param {string} qual */
+function qualificationUsageCounts(qual) {
+  if (!state) return { emps: 0, projects: 0 };
+  let emps = 0;
+  for (const e of state.employees) {
+    if (String(e.Qualifikation ?? "").trim() === qual) emps += 1;
+  }
+  let projects = 0;
+  for (const p of state.projects) {
+    const bq = p.Benötigte_Qualifikationen || {};
+    if (Object.prototype.hasOwnProperty.call(bq, qual)) projects += 1;
+  }
+  return { emps, projects };
+}
+
+/**
+ * @param {string} oldName
+ * @param {string} newName
+ */
+function applyQualificationRename(oldName, newName) {
+  if (!state) return;
+  const old = String(oldName).trim();
+  const neu = String(newName).trim();
+  if (!old || !neu || old === neu) return;
+  const hadNew = state.qualifications.includes(neu);
+  for (const e of state.employees) {
+    if (String(e.Qualifikation ?? "").trim() === old) e.Qualifikation = neu;
+  }
+  for (const p of state.projects) {
+    const bq = p.Benötigte_Qualifikationen || {};
+    if (!Object.prototype.hasOwnProperty.call(bq, old)) continue;
+    const nOld = Number(bq[old]);
+    delete bq[old];
+    const cur = Number(bq[neu]);
+    const add = Number.isFinite(nOld) && nOld > 0 ? nOld : 0;
+    const base = Number.isFinite(cur) && cur > 0 ? cur : 0;
+    bq[neu] = Math.min(999, base + add);
+  }
+  if (hadNew) {
+    state.qualifications = state.qualifications.filter((q) => q !== old);
+  } else {
+    state.qualifications = state.qualifications.map((q) => (q === old ? neu : q));
+  }
+  const seen = new Set();
+  state.qualifications = state.qualifications.filter((q) => {
+    if (seen.has(q)) return false;
+    seen.add(q);
+    return true;
+  });
+  state.qualifications.sort((a, b) => a.localeCompare(b, "de"));
+  ensureStateQualifications();
+}
+
+function renderQualificationsTable() {
+  const tbody = /** @type {HTMLElement | null} */ ($("#quals-tbody"));
+  if (!tbody || !state) return;
+  const quals = [...state.qualifications].sort((a, b) => a.localeCompare(b, "de"));
+  tbody.innerHTML = quals.length
+    ? quals
+        .map((q) => {
+          const { emps, projects } = qualificationUsageCounts(q);
+          const used = emps > 0 || projects > 0;
+          const usage = `${emps} Person${emps === 1 ? "" : "en"}, ${projects} Projekt${projects === 1 ? "" : "e"}`;
+          const esc = escapeHtml(q);
+          return `<tr data-qual-original="${esc}">
+      <td><input type="text" class="input-inline qual-edit-name" maxlength="80" value="${esc}" aria-label="Qualifikation ${esc}" /></td>
+      <td class="hint">${usage}</td>
+      <td class="actions-cell">
+        <button type="button" class="btn btn--small btn--primary" data-qual-save title="Namen speichern">Speichern</button>
+        <button type="button" class="btn btn--small btn--ghost" data-qual-delete ${
+          used ? "disabled" : ""
+        } title="${used ? "Zuerst aus Personen und Projekten entfernen" : "Eintrag aus der Liste entfernen"}">Löschen</button>
+      </td>
+    </tr>`;
+        })
+        .join("")
+    : '<tr><td colspan="3" class="hint">Keine Einträge.</td></tr>';
+}
+
+function bindQualificationsTableOnce() {
+  const tbody = /** @type {HTMLElement | null} */ ($("#quals-tbody"));
+  if (!tbody || tbody.dataset.qualBound === "1") return;
+  tbody.dataset.qualBound = "1";
+  tbody.addEventListener("click", async (ev) => {
+    const t = ev.target instanceof Element ? ev.target : null;
+    const saveBtn = t?.closest("button[data-qual-save]");
+    const delBtn = t?.closest("button[data-qual-delete]");
+    const row = t?.closest("tr[data-qual-original]");
+    if (!(row instanceof HTMLTableRowElement) || !state) return;
+    const origRaw = row.getAttribute("data-qual-original");
+    const original = origRaw ?? "";
+    if (saveBtn) {
+      const inp = row.querySelector("input.qual-edit-name");
+      if (!(inp instanceof HTMLInputElement)) return;
+      const neu = inp.value.trim();
+      if (!neu) {
+        await openModal("Qualifikation", "<div>Der Name darf nicht leer sein.</div>", {
+          variant: "info",
+          confirmText: "Verstanden",
+        });
+        return;
+      }
+      if (neu === original) return;
+      if (neu !== original && state.qualifications.includes(neu)) {
+        const ok = await openModal(
+          "Zusammenführen",
+          `<div>„${escapeHtml(neu)}“ ist bereits vorhanden. Alle Personen und Projekt-Anforderungen mit „${escapeHtml(
+            original
+          )}“ werden auf „${escapeHtml(neu)}“ umgestellt und der doppelte Eintrag entfernt.</div>`,
+          { confirmText: "Zusammenführen", confirmDanger: true }
+        );
+        if (!ok) return;
+      }
+      recordUndoSnapshot();
+      applyQualificationRename(original, neu);
+      await syncEmployeesThenPersist();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+      return;
+    }
+    if (delBtn) {
+      if (delBtn instanceof HTMLButtonElement && delBtn.disabled) return;
+      const { emps, projects } = qualificationUsageCounts(original);
+      if (emps > 0 || projects > 0) {
+        await openModal(
+          "Löschen nicht möglich",
+          "<div>Diese Qualifikation ist noch Personen oder Projekten zugeordnet.</div>",
+          { variant: "info", confirmText: "Verstanden" }
+        );
+        return;
+      }
+      const ok = await openModal(
+        "Qualifikation löschen",
+        `<div>„${escapeHtml(original)}“ aus der Stammliste entfernen?</div>`,
+        { confirmText: "Ja, löschen", confirmDanger: true }
+      );
+      if (!ok) return;
+      recordUndoSnapshot();
+      state.qualifications = state.qualifications.filter((q) => q !== original);
+      await persist();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+    }
+  });
+}
+
 function renderPersonnelTable() {
   if (!state) return;
   const tbody = /** @type {HTMLElement} */ ($("#personnel-tbody"));
@@ -3439,7 +3647,7 @@ function renderPersonnelTable() {
       const besch = normalizeBeschäftigung(e.Beschäftigung);
       const stufe = String(e.Stufe ?? "").trim();
       const abt = normalizeAbteilung(e.Abteilung);
-      return `<tr>
+      return `<tr class="emp-qual-surface" style="--qh:${empQualHue(e.Qualifikation)}">
         <td>${e.Personalnummer}</td>
         <td>${e.Vorname} ${e.Nachname}</td>
         <td>${e.Qualifikation}</td>
@@ -3666,6 +3874,8 @@ function renderPersonnelView() {
   fillTeamLeaderSelect();
   fillPersonnelStufeFilter();
   renderTeamLeadersTable();
+  renderQualificationsTable();
+  bindQualificationsTableOnce();
   renderPersonnelTable();
   fillTeamleaderAbteilungSelect("#new-tl-abteilung", ABTEILUNGEN[0]);
   syncEditAbsenceHint();
@@ -3701,6 +3911,42 @@ function bindUrlaubPeriodenButtonsOnce() {
 
 function setupPersonnelInteractions() {
   bindUrlaubPeriodenButtonsOnce();
+  bindQualificationsTableOnce();
+  const qualAddForm = /** @type {HTMLFormElement | null} */ (document.getElementById("qual-add-form"));
+  if (qualAddForm && qualAddForm.dataset.bound !== "1") {
+    qualAddForm.dataset.bound = "1";
+    qualAddForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (!state) return;
+      const inp = /** @type {HTMLInputElement | null} */ (document.getElementById("qual-add-input"));
+      if (!inp) return;
+      const name = inp.value.trim();
+      if (!name) {
+        await openModal("Qualifikation", "<div>Bitte einen Namen eingeben.</div>", {
+          variant: "info",
+          confirmText: "Verstanden",
+        });
+        return;
+      }
+      if (state.qualifications.includes(name)) {
+        await openModal("Qualifikation", "<div>Dieser Eintrag ist bereits vorhanden.</div>", {
+          variant: "info",
+          confirmText: "Verstanden",
+        });
+        return;
+      }
+      recordUndoSnapshot();
+      state.qualifications.push(name);
+      state.qualifications.sort((a, b) => a.localeCompare(b, "de"));
+      inp.value = "";
+      await persist();
+      renderPersonnelView();
+      renderDashboard();
+      if ($("#view-projects").classList.contains("view--active")) {
+        renderProjectsView();
+      }
+    });
+  }
   $("#personnel-search").addEventListener("input", renderPersonnelTable);
   $("#personnel-filter-status").addEventListener("change", renderPersonnelTable);
   $("#personnel-filter-qual").addEventListener("change", renderPersonnelTable);
