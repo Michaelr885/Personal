@@ -1874,14 +1874,22 @@ textarea {
   color: #eff6ff;
 }
 
-:root[data-theme="dark"] .gantt .grid-header,
-:root[data-theme="dark"] .gantt .lower-text,
-:root[data-theme="dark"] .gantt .upper-text {
-  fill: var(--muted);
+:root[data-theme="dark"] .gantt .grid-header {
+  fill: #334155;
+  stroke: #475569;
 }
 
 :root[data-theme="dark"] .gantt .grid-row {
-  fill: #334155;
+  fill: #1e293b;
+}
+
+:root[data-theme="dark"] .gantt .grid-row:nth-child(even) {
+  fill: #243044;
+}
+
+:root[data-theme="dark"] .gantt .lower-text,
+:root[data-theme="dark"] .gantt .upper-text {
+  fill: #e2e8f0;
 }
 
 :root[data-theme="dark"] .gantt .row-line {
@@ -1889,13 +1897,129 @@ textarea {
 }
 
 :root[data-theme="dark"] .gantt .tick {
-  stroke: #475569;
+  stroke: #64748b;
+}
+
+:root[data-theme="dark"] .gantt .tick.thick {
+  stroke: #94a3b8;
 }
 
 :root[data-theme="dark"] .gantt .today-highlight {
+  fill: rgba(234, 179, 8, 0.12);
   stroke: var(--primary);
+}
+
+:root[data-theme="dark"] .gantt .arrow {
+  stroke: #94a3b8;
+}
+
+:root[data-theme="dark"] .gantt .bar-label.big {
+  fill: #e2e8f0;
 }
 
 :root[data-theme="dark"] #gantt-container .gantt-container {
   background: var(--surface);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .gantt-container .popup-wrapper {
+  background: rgba(15, 23, 42, 0.97);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .gantt-container .popup-wrapper .subtitle {
+  color: var(--muted);
+}
+
+/* Native Select / Datum / Textfelder: eigene Farben, sonst helle Schrift auf weißem Control */
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  background-color: #334155;
+  color: #f1f5f9;
+  border-color: #475569;
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #94a3b8;
+}
+
+:root[data-theme="dark"] input[type="checkbox"],
+:root[data-theme="dark"] input[type="radio"] {
+  accent-color: var(--primary);
+}
+
+:root[data-theme="dark"] input[type="color"] {
+  background: #334155;
+  padding: 0.15rem;
+}
+  background: #334155;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary);
+}
+
+:root[data-theme="dark"] .btn--primary {
+  color: #fff;
+  border-color: #2563eb;
+}
+
+:root[data-theme="dark"] .btn-group--toggle .btn.is-active {
+  color: #e0f2fe;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .badge {
+  background: var(--primary-soft);
+  color: #bfdbfe;
+}
+
+:root[data-theme="dark"] .badge--muted {
+  background: #334155;
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .project-drop-card {
+  background: #1e293b;
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .project-drop-card--active {
+  background: rgba(96, 165, 250, 0.22);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.4);
+}
+
+:root[data-theme="dark"] .employee-card {
+  background: linear-gradient(145deg, #334155 0%, #1e293b 100%);
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .data-table tbody tr:hover {
+  background: rgba(51, 65, 85, 0.65);
+}
+
+:root[data-theme="dark"] .card-team li {
+  background: #334155;
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .panel--unassigned {
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.28) 0%, var(--surface) 52%);
+}
+
+:root[data-theme="dark"] .panel--unassigned.team-drop-zone--active {
+  background: linear-gradient(180deg, var(--primary-soft) 0%, #1e293b 58%);
 }
