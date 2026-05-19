@@ -122,6 +122,7 @@ async function undoLastChange() {
     normalizeAllEmployeesShape();
     await persist();
     refreshAllDataViews();
+    showUndoRedoToast("undo");
   } finally {
     historySuspended = false;
   }
@@ -138,8 +139,75 @@ async function redoLastChange() {
     normalizeAllEmployeesShape();
     await persist();
     refreshAllDataViews();
+    showUndoRedoToast("redo");
   } finally {
     historySuspended = false;
+  }
+}
+
+/** Kurzes Feedback nach Rückgängig / Wiederholen (Strg+Z / Strg+Y). */
+function showUndoRedoToast(/** @type {"undo" | "redo"} */ kind) {
+  const stack = /** @type {HTMLElement | null} */ (document.querySelector("#toast-stack"));
+  if (!stack) return;
+  const msg = kind === "redo" ? "Wiederhergestellt." : "Aktion rückgängig gemacht.";
+  const el = document.createElement("div");
+  el.className = "toast toast--history";
+  el.setAttribute("role", "status");
+  el.textContent = msg;
+  stack.appendChild(el);
+  requestAnimationFrame(() => {
+    el.classList.add("toast--visible");
+  });
+  window.setTimeout(() => {
+    el.classList.remove("toast--visible");
+    window.setTimeout(() => el.remove(), 320);
+  }, 2400);
+}
+
+function applyThemeFromStorage() {
+  let theme = "light";
+  try {
+    const t = localStorage.getItem(STORAGE_THEME);
+    if (t === "dark" || t === "light") theme = t;
+  } catch {
+    /* ignore */
+  }
+  document.documentElement.dataset.theme = theme;
+  const label = /** @type {HTMLElement | null} */ (document.querySelector("#pref-theme-label"));
+  const icon = /** @type {HTMLElement | null} */ (document.querySelector("#pref-theme-icon"));
+  if (label) label.textContent = theme === "dark" ? "Hellmodus" : "Dark Mode";
+  if (icon) {
+    icon.className = theme === "dark" ? "fa-solid fa-sun" : "fa-solid fa-moon";
+  }
+}
+
+function initAppPreferences() {
+  applyThemeFromStorage();
+  const sel = /** @type {HTMLSelectElement | null} */ (document.querySelector("#pref-feierland"));
+  if (sel && sel.dataset.bound !== "1") {
+    sel.dataset.bound = "1";
+    sel.innerHTML = BUNDESLAND_LIST.map(
+      ([code, name]) => `<option value="${escapeHtml(code)}">${escapeHtml(name)}</option>`
+    ).join("");
+    sel.value = getFeierlandCode();
+    sel.addEventListener("change", () => {
+      setFeierlandCode(sel.value);
+      renderUrlaubPlan();
+    });
+  }
+  const themeBtn = /** @type {HTMLButtonElement | null} */ (document.querySelector("#pref-theme-toggle"));
+  if (themeBtn && themeBtn.dataset.bound !== "1") {
+    themeBtn.dataset.bound = "1";
+    themeBtn.addEventListener("click", () => {
+      const cur = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+      const next = cur === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(STORAGE_THEME, next);
+      } catch {
+        /* ignore */
+      }
+      applyThemeFromStorage();
+    });
   }
 }
 
@@ -233,7 +301,7 @@ const titles = {
   },
   urlaub: {
     title: "Urlaub",
-    subtitle: "Urlaubszeiten aller Mitarbeitenden im Monatsraster – filterbar.",
+    subtitle: "Monatsraster und Jahresstatistik – Feiertage nach gewähltem Bundesland (Sidebar).",
   },
 };
 
@@ -833,46 +901,143 @@ function toISODateLocal(d) {
   return `${yy}-${mm}-${dd}`;
 }
 
-/** Gesetzliche Feiertage Hessen: ISO-Datum → deutscher Kurzname (pro Jahr). */
-function hessenHolidayMapForYear(/** @type {number} */ year) {
+const STORAGE_FEIERLAND = "app_feierland";
+const STORAGE_THEME = "app_theme";
+
+/** ISO-Code → Anzeigename (Feiertags-Auswahl). */
+const BUNDESLAND_LIST = [
+  ["BW", "Baden-Württemberg"],
+  ["BY", "Bayern"],
+  ["BE", "Berlin"],
+  ["BB", "Brandenburg"],
+  ["HB", "Bremen"],
+  ["HH", "Hamburg"],
+  ["HE", "Hessen"],
+  ["MV", "Mecklenburg-Vorpommern"],
+  ["NI", "Niedersachsen"],
+  ["NW", "Nordrhein-Westfalen"],
+  ["RP", "Rheinland-Pfalz"],
+  ["SL", "Saarland"],
+  ["SN", "Sachsen"],
+  ["ST", "Sachsen-Anhalt"],
+  ["SH", "Schleswig-Holstein"],
+  ["TH", "Thüringen"],
+];
+
+/**
+ * Welche zusätzlichen gesetzlichen Feiertage gelten (über den bundeseinheitlichen Kern hinaus).
+ * Vereinfachtes Modell nach gängiger Verwaltungspraxis; Grenzfälle (nur teilweise Land) nicht abgebildet.
+ * @type {Record<string, { fronleichnam?: boolean; dreikoenige?: boolean; maria15?: boolean; allerheiligen?: boolean; reformation31?: boolean; frauentag8?: boolean; bussBettag?: boolean; weltkind20?: boolean }>}
+ */
+const FEIERTAG_LAND_REGELN = {
+  BW: { fronleichnam: true, dreikoenige: true, allerheiligen: true },
+  BY: { fronleichnam: true, dreikoenige: true, maria15: true, allerheiligen: true },
+  BE: { reformation31: true, frauentag8: true },
+  BB: { reformation31: true },
+  HB: { reformation31: true },
+  HH: { reformation31: true },
+  HE: { fronleichnam: true },
+  MV: { reformation31: true, frauentag8: true },
+  NI: { reformation31: true },
+  NW: { allerheiligen: true },
+  RP: { fronleichnam: true, allerheiligen: true },
+  SL: { fronleichnam: true, maria15: true, allerheiligen: true },
+  SN: { reformation31: true, bussBettag: true },
+  ST: { reformation31: true, dreikoenige: true },
+  SH: { reformation31: true },
+  TH: { reformation31: true, weltkind20: true },
+};
+
+function getFeierlandCode() {
+  try {
+    const v = localStorage.getItem(STORAGE_FEIERLAND);
+    if (v && FEIERTAG_LAND_REGELN[v]) return v;
+  } catch {
+    /* ignore */
+  }
+  return "HE";
+}
+
+/** @param {string} code */
+function setFeierlandCode(code) {
+  if (!FEIERTAG_LAND_REGELN[code]) return;
+  try {
+    localStorage.setItem(STORAGE_FEIERLAND, code);
+  } catch {
+    /* ignore */
+  }
+  holidayYearLandCache.clear();
+}
+
+/** @param {string} code */
+function feierlandDisplayName(code) {
+  const row = BUNDESLAND_LIST.find((x) => x[0] === code);
+  return row ? row[1] : code;
+}
+
+/** Buß- und Bettag: Mittwoch vor dem 23. November (SN). */
+function bussUndBettagISO(/** @type {number} */ year) {
+  const d = new Date(year, 10, 23, 12, 0, 0, 0);
+  while (d.getDay() !== 3) d.setDate(d.getDate() - 1);
+  return toISODateLocal(d);
+}
+
+/**
+ * Gesetzliche Feiertage für ein Bundesland: ISO-Datum → Kurzname.
+ * @param {number} year
+ * @param {string} landCode
+ */
+function buildHolidayMapForYear(year, landCode) {
+  const R = FEIERTAG_LAND_REGELN[landCode] ?? FEIERTAG_LAND_REGELN.HE;
   const Easter = easterSundayLocalMidday(year);
   /** @type {Map<string, string>} */
   const m = new Map();
-  m.set(toISODateLocal(new Date(year, 0, 1, 12, 0, 0, 0)), "Neujahr");
-  m.set(toISODateLocal(new Date(year, 4, 1, 12, 0, 0, 0)), "Tag der Arbeit");
-  m.set(toISODateLocal(new Date(year, 9, 3, 12, 0, 0, 0)), "Tag der Deutschen Einheit");
-  m.set(toISODateLocal(new Date(year, 11, 25, 12, 0, 0, 0)), "1. Weihnachtstag");
-  m.set(toISODateLocal(new Date(year, 11, 26, 12, 0, 0, 0)), "2. Weihnachtstag");
-  m.set(toISODateLocal(addCalendarDaysToDate(Easter, -2)), "Karfreitag");
-  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 1)), "Ostermontag");
-  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 39)), "Christi Himmelfahrt");
-  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 50)), "Pfingstmontag");
-  m.set(toISODateLocal(addCalendarDaysToDate(Easter, 60)), "Fronleichnam");
+  const addD = (/** @type {Date} */ dt, /** @type {string} */ name) => {
+    m.set(toISODateLocal(dt), name);
+  };
+  addD(new Date(year, 0, 1, 12, 0, 0, 0), "Neujahr");
+  addD(new Date(year, 4, 1, 12, 0, 0, 0), "Tag der Arbeit");
+  addD(new Date(year, 9, 3, 12, 0, 0, 0), "Tag der Deutschen Einheit");
+  addD(new Date(year, 11, 25, 12, 0, 0, 0), "1. Weihnachtstag");
+  addD(new Date(year, 11, 26, 12, 0, 0, 0), "2. Weihnachtstag");
+  addD(addCalendarDaysToDate(Easter, -2), "Karfreitag");
+  addD(addCalendarDaysToDate(Easter, 1), "Ostermontag");
+  addD(addCalendarDaysToDate(Easter, 39), "Christi Himmelfahrt");
+  addD(addCalendarDaysToDate(Easter, 50), "Pfingstmontag");
+  if (R.fronleichnam) addD(addCalendarDaysToDate(Easter, 60), "Fronleichnam");
+  if (R.dreikoenige) addD(new Date(year, 0, 6, 12, 0, 0, 0), "Heilige Drei Könige");
+  if (R.maria15) addD(new Date(year, 7, 15, 12, 0, 0, 0), "Mariä Himmelfahrt");
+  if (R.allerheiligen) addD(new Date(year, 10, 1, 12, 0, 0, 0), "Allerheiligen");
+  if (R.reformation31) addD(new Date(year, 9, 31, 12, 0, 0, 0), "Reformationstag");
+  if (R.frauentag8) addD(new Date(year, 2, 8, 12, 0, 0, 0), "Internationaler Frauentag");
+  if (R.weltkind20) addD(new Date(year, 8, 20, 12, 0, 0, 0), "Weltkindertag");
+  if (R.bussBettag) m.set(bussUndBettagISO(year), "Buß- und Bettag");
   return m;
 }
 
-/** @type {Map<number, Map<string, string>>} */
-const hessenHolidayYearCache = new Map();
+/** @type {Map<string, Map<string, string>>} */
+const holidayYearLandCache = new Map();
 
-function hessenHolidayMapCached(/** @type {number} */ year) {
-  let m = hessenHolidayYearCache.get(year);
+function holidayMapCached(/** @type {number} */ year, /** @type {string} */ landCode) {
+  const key = `${year}|${landCode}`;
+  let m = holidayYearLandCache.get(key);
   if (!m) {
-    m = hessenHolidayMapForYear(year);
-    hessenHolidayYearCache.set(year, m);
+    m = buildHolidayMapForYear(year, landCode);
+    holidayYearLandCache.set(key, m);
   }
   return m;
 }
 
 /** @param {string} iso yyyy-mm-dd */
-function hessenHolidayNameDE(iso) {
+function bundeslandHolidayNameDE(iso) {
   const key = String(iso).slice(0, 10);
   const y = Number(key.slice(0, 4));
   if (!Number.isFinite(y)) return null;
-  return hessenHolidayMapCached(y).get(key) ?? null;
+  return holidayMapCached(y, getFeierlandCode()).get(key) ?? null;
 }
 
-function isHessenPublicHolidayISO(iso) {
-  return hessenHolidayNameDE(iso) != null;
+function isLandPublicHolidayISO(iso) {
+  return bundeslandHolidayNameDE(iso) != null;
 }
 
 /** 24. und 30. Dezember: betrieblich frei (kein gesetzlicher Feiertag), zählen nicht als Urlaubs-Arbeitstag. */
@@ -892,16 +1057,16 @@ function betrieblichFreierDezemberTagLabelDE(iso) {
     : "30. Dezember · betrieblich frei";
 }
 
-/** Mo–Fr ohne hessische gesetzliche Feiertage und ohne betrieblich freie Dez.-Tage (Urlaubsstatistik). */
+/** Mo–Fr ohne gesetzliche Feiertage des gewählten Bundeslandes und ohne betrieblich freie Dez.-Tage (Urlaubsstatistik). */
 function countsAsUrlaubArbeitstag(iso) {
   if (isBetrieblichFreierDezemberTagISO(iso)) return false;
   const d = parseISODate(String(iso));
   const w = d.getDay();
   if (w === 0 || w === 6) return false;
-  return !isHessenPublicHolidayISO(iso);
+  return !isLandPublicHolidayISO(iso);
 }
 
-/** Arbeitstage im ISO-Inklusivbereich [isoStart, isoEnd] (Hessen, ohne 24./30. Dez. betrieblich frei). */
+/** Arbeitstage im ISO-Inklusivbereich [isoStart, isoEnd] (gewähltes Bundesland, ohne 24./30. Dez. betrieblich frei). */
 function countUrlaubWorkdaysInInclusiveRange(isoStart, isoEnd) {
   let c = 0;
   let cur = isoStart;
@@ -975,7 +1140,7 @@ function mergeInclusiveUrlaubClips(/** @type {{ start: string; end: string }[]} 
   return out;
 }
 
-/** Urlaubs-Arbeitstage (Hessen: Mo–Fr ohne gesetzliche Feiertage, ohne 24./30. Dez. betrieblich frei) im Fenster [winStart, winEnd]. */
+/** Urlaubs-Arbeitstage (Mo–Fr ohne gesetzliche Feiertage des Bundeslandes, ohne 24./30. Dez. betrieblich frei) im Fenster [winStart, winEnd]. */
 function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
   /** @type {{ start: string; end: string }[]} */
   const clips = [];
@@ -1096,7 +1261,7 @@ function renderUrlaubPlan() {
     const iso = isoFromYearMonthDay(y, m, d);
     const w = dt.getDay();
     const isWe = w === 0 || w === 6;
-    const hName = hessenHolidayNameDE(iso);
+    const hName = bundeslandHolidayNameDE(iso);
     const betriebFrei = betrieblichFreierDezemberTagLabelDE(iso);
     const shortD = dt.toLocaleDateString("de-DE", { weekday: "short" });
     const titleBase = dt.toLocaleDateString("de-DE", {
@@ -1226,7 +1391,7 @@ function renderUrlaubPlan() {
             </button>
           </span>
         </h3>
-        <p class="hint">Arbeitstage Hessen (ohne Sa/So, ohne gesetzliche Feiertage in Hessen, ohne 24./30. Dezember betrieblich frei) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
+        <p class="hint">Arbeitstage für <strong>${escapeHtml(feierlandDisplayName(getFeierlandCode()))}</strong> (ohne Sa/So, ohne gesetzliche Feiertage dort, ohne 24./30. Dezember betrieblich frei) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
         <div class="table-wrap urlaub-year-table-wrap">
           <table class="data-table urlaub-summary-table urlaub-year-table">
             <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
@@ -4406,6 +4571,7 @@ function boot() {
   closeAllModalsAndBackdrops();
   state = null;
   clearUndoHistory();
+  initAppPreferences();
   setupNavigation();
   setupDashboardDnD();
   setupDashboardAbsenceModal();
