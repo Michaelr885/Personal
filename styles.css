@@ -262,10 +262,6 @@ code {
   margin-top: 0.35rem;
 }
 
-.dashboard-abteilung-block {
-  --abteilung-accent: var(--team-color, var(--team-fallback));
-}
-
 .dashboard-abteilung__title {
   margin: 0 0 0.55rem;
   padding: 0 0.25rem;
@@ -274,7 +270,7 @@ code {
   font-weight: 650;
   letter-spacing: 0.02em;
   line-height: 1.25;
-  color: var(--abteilung-accent);
+  color: var(--abteilung-accent, var(--primary));
 }
 
 .dashboard-teams-wrap .grid-dashboard {

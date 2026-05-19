@@ -1924,7 +1924,7 @@ function renderDashboard() {
           </li>`;
       })
       .join("");
-    return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}">
+    return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${sanitizeTeamColor(tl.Team_Farbe)}">
         <div class="card-team__drag-handle" data-dashboard-team-drag="1">
           <div class="card-team__title">
             <strong>${escapeHtml(tl.Name)}</strong>
@@ -1953,7 +1953,7 @@ function renderDashboard() {
             if (!tls.length) return "";
             const accent = dashboardAbteilungAkzentfarbe(abt);
             const cards = tls.map((tl) => dashboardTeamCardArticleHtml(tl)).join("");
-            return `<section class="dashboard-abteilung-block" style="--team-color: ${accent}">
+            return `<section class="dashboard-abteilung-block" style="--abteilung-accent: ${accent}">
         <h3 class="dashboard-abteilung__title">${escapeHtml(abt)}</h3>
         <div class="grid-dashboard">${cards}</div>
       </section>`;
