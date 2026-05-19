@@ -228,6 +228,47 @@
           <section id="view-personnel" class="view" hidden aria-labelledby="page-title">
             <div class="panel">
               <div class="panel__head panel__head--wrap">
+                <h2><i class="fa-solid fa-tags"></i> Qualifikationen</h2>
+              </div>
+              <p class="hint">
+                Diese Liste steuert die Auswahl in Stammdaten, im Projektbedarf und im Ressourcenpool. Umbenennen
+                führt vorhandene Einträge unter dem neuen Namen zusammen. Löschen ist nur möglich, wenn die
+                Qualifikation nirgends mehr verwendet wird. Im Dashboard und Urlaubsplan erscheint jede Person mit
+                einer dezenten Hintergrundfarbe je nach Qualifikation.
+              </p>
+              <form id="qual-add-form" class="form-grid form-grid--wide assign-form">
+                <label class="span-2">
+                  Neue Qualifikation
+                  <input
+                    type="text"
+                    id="qual-add-input"
+                    maxlength="80"
+                    placeholder="z. B. Ausmesser"
+                    autocomplete="off"
+                  />
+                </label>
+                <div class="form-actions span-2">
+                  <button type="submit" class="btn btn--primary">
+                    <i class="fa-solid fa-plus"></i> Hinzufügen
+                  </button>
+                </div>
+              </form>
+              <div class="table-wrap">
+                <table class="data-table" aria-label="Qualifikationen verwalten">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Verwendung</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="quals-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel__head panel__head--wrap">
                 <h2><i class="fa-solid fa-people-roof"></i> Teamleitende</h2>
               </div>
               <p class="hint">

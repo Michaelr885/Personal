@@ -345,6 +345,53 @@ code {
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
 }
 
+/* Dezente Hintergrundfarbe je Qualifikation (Dashboard, Personal, Pool, Urlaub) */
+.emp-qual-surface {
+  --qh: 200;
+  background: linear-gradient(
+    145deg,
+    hsla(var(--qh), 52%, 91%, 0.92),
+    hsla(var(--qh), 38%, 99%, 1)
+  ) !important;
+}
+
+:root[data-theme="dark"] .emp-qual-surface {
+  background: linear-gradient(
+    145deg,
+    hsla(var(--qh), 42%, 26%, 0.75),
+    hsla(var(--qh), 28%, 12%, 0.96)
+  ) !important;
+}
+
+.card-team li[data-dashboard-employee].emp-qual-surface:hover {
+  background: linear-gradient(
+    145deg,
+    hsla(var(--qh), 48%, 86%, 1),
+    hsla(var(--qh), 36%, 96%, 1)
+  ) !important;
+  border-color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .card-team li[data-dashboard-employee].emp-qual-surface:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: linear-gradient(
+    145deg,
+    hsla(var(--qh), 40%, 30%, 0.9),
+    hsla(var(--qh), 26%, 16%, 0.98)
+  ) !important;
+}
+
+.input-inline.qual-edit-name {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
 .dashboard-emp-abs {
   display: flex;
   flex-wrap: wrap;

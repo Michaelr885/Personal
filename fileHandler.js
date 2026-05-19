@@ -217,6 +217,7 @@ export function createMockDataset() {
         Benötigte_Qualifikationen: { Monteur: 2, Schweißer: 2 },
       },
     ],
+    qualifications: ["Monteur", "Schweißer", "Bauleiter", "Elektriker", "Lagerist"],
     assignments: [
       {
         ID: 1,
@@ -259,7 +260,7 @@ export function createMockDataset() {
 
 /**
  * @param {unknown} raw
- * @returns {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[] } | null}
+ * @returns {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications:string[] } | null}
  */
 function normalizeDataset(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -268,6 +269,13 @@ function normalizeDataset(raw) {
   const employees = Array.isArray(o.employees) ? o.employees : [];
   const projects = Array.isArray(o.projects) ? o.projects : [];
   const assignments = Array.isArray(o.assignments) ? o.assignments : [];
+  /** @type {string[]} */
+  let qualifications = [];
+  if (Array.isArray(o.qualifications)) {
+    qualifications = o.qualifications
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean);
+  }
   const empty =
     team_leaders.length === 0 &&
     employees.length === 0 &&
@@ -341,7 +349,7 @@ function normalizeDataset(raw) {
     if (row && typeof row === "object") /** @type {{ Reihenfolge: number }} */ (row).Reihenfolge = i;
   });
 
-  return { team_leaders, employees, projects, assignments };
+  return { team_leaders, employees, projects, assignments, qualifications };
 }
 
 export function isFileSystemAccessSupported() {
@@ -406,7 +414,7 @@ export async function linkLocalDataFile() {
 
 /**
  * Überschreibt die verknüpfte Datei vollständig (Auto-Save).
- * @param {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[] }} data
+ * @param {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications?:string[] }} data
  */
 export async function saveDataToFile(data) {
   if (!dataFileHandle) {
