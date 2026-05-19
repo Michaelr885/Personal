@@ -1464,6 +1464,30 @@ function sanitizeTeamColor(c) {
   return "#64748b";
 }
 
+/** Farben pro Abteilung im Dashboard (Index in ABTEILUNGEN, danach Palette zyklisch; unbekannte Namen stabil per Hash). */
+const DASHBOARD_ABTEILUNG_PALETTE = [
+  "#2563eb",
+  "#0d9488",
+  "#7c3aed",
+  "#ea580c",
+  "#db2777",
+  "#0891b2",
+  "#4d7c0f",
+  "#b45309",
+];
+
+/** @param {string} normalizedAbt */
+function dashboardAbteilungAkzentfarbe(normalizedAbt) {
+  const name = String(normalizedAbt ?? "").trim();
+  const list = /** @type {readonly string[]} */ (ABTEILUNGEN);
+  const idx = list.indexOf(name);
+  if (idx >= 0) return DASHBOARD_ABTEILUNG_PALETTE[idx % DASHBOARD_ABTEILUNG_PALETTE.length];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  return `hsl(${hue} 52% 36%)`;
+}
+
 /**
  * PRÜFUNG 1: Status Krank/Urlaub
  * PRÜFUNG 2: Überschneidung mit beliebigem bestehenden assignment desselben Mitarbeiters
@@ -1871,23 +1895,23 @@ function renderDashboard() {
           )
           .join("")}</div>`;
 
-  const teamCards = teamLeadersSortedForDashboard()
-    .map((tl) => {
-      const members = state.employees.filter(
-        (e) => Number(e.Teamleiter_ID) === Number(tl.ID)
-      );
-      const assignedCount = members.filter((m) =>
-        state.assignments.some(
-          (a) =>
-            Number(a.Employee_ID) === Number(m.ID) &&
-            rangesOverlap(a.Startdatum, a.Enddatum, today, today)
-        )
-      ).length;
-      const items = members
-        .map((m) => {
-          const absBlock = dashboardMemberAbsenceBlock(m);
-          const onProject = employeeActiveOnProjectToday(m.ID);
-          return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte, „Ohne Teamleitung“ oder „Abwesenheit melden“ ziehen">
+  const sortedTls = teamLeadersSortedForDashboard();
+
+  /** @param {TeamLeader} tl */
+  function dashboardTeamCardArticleHtml(tl) {
+    const members = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID));
+    const assignedCount = members.filter((m) =>
+      state.assignments.some(
+        (a) =>
+          Number(a.Employee_ID) === Number(m.ID) &&
+          rangesOverlap(a.Startdatum, a.Enddatum, today, today)
+      )
+    ).length;
+    const items = members
+      .map((m) => {
+        const absBlock = dashboardMemberAbsenceBlock(m);
+        const onProject = employeeActiveOnProjectToday(m.ID);
+        return `<li draggable="true" data-dashboard-employee="${m.ID}" class="dashboard-emp-row" title="Auf andere Teamkarte, „Ohne Teamleitung“ oder „Abwesenheit melden“ ziehen">
             <div class="dashboard-emp-row__top">
             <span>${escapeHtml(m.Vorname)} ${escapeHtml(m.Nachname)} <span class="tag-mini">${escapeHtml(m.Qualifikation)}</span></span>
             <span>${
@@ -1898,20 +1922,44 @@ function renderDashboard() {
             </div>
             ${absBlock}
           </li>`;
-        })
-        .join("");
-      const abt = normalizeAbteilung(tl.Abteilung);
-      return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${tl.Team_Farbe}">
+      })
+      .join("");
+    return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}">
         <div class="card-team__drag-handle" data-dashboard-team-drag="1">
           <div class="card-team__title">
             <strong>${escapeHtml(tl.Name)}</strong>
           </div>
         </div>
-        <p class="hint card-team__meta">${escapeHtml(abt)} · ${assignedCount} heute im Projekt</p>
+        <p class="hint card-team__meta">${assignedCount} heute im Projekt</p>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
-    })
-    .join("");
+  }
+
+  const deptsOrdered = /** @type {string[]} */ ([]);
+  for (const abt of ABTEILUNGEN) {
+    if (sortedTls.some((tl) => normalizeAbteilung(tl.Abteilung) === abt)) deptsOrdered.push(abt);
+  }
+  for (const tl of sortedTls) {
+    const a = normalizeAbteilung(tl.Abteilung);
+    if (!deptsOrdered.includes(a)) deptsOrdered.push(a);
+  }
+
+  const teamSectionsHtml =
+    deptsOrdered.length === 0
+      ? '<p class="hint">Keine Teamleitungen erfasst.</p>'
+      : deptsOrdered
+          .map((abt) => {
+            const tls = sortedTls.filter((tl) => normalizeAbteilung(tl.Abteilung) === abt);
+            if (!tls.length) return "";
+            const accent = dashboardAbteilungAkzentfarbe(abt);
+            const cards = tls.map((tl) => dashboardTeamCardArticleHtml(tl)).join("");
+            return `<section class="dashboard-abteilung-block" style="--team-color: ${accent}">
+        <h3 class="dashboard-abteilung__title">${escapeHtml(abt)}</h3>
+        <div class="grid-dashboard">${cards}</div>
+      </section>`;
+          })
+          .filter(Boolean)
+          .join("");
 
   const absences = state.employees.filter(employeeMatchesDashboardAbsencePanel);
   absences.sort((a, b) => {
@@ -2005,7 +2053,7 @@ function renderDashboard() {
       <div class="panel__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
       </div>
-      <div class="grid-dashboard">${teamCards}</div>
+      <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
     <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
       <div class="panel__head">
