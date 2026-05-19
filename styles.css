@@ -938,6 +938,16 @@ code {
   color: var(--status-verfügbar);
 }
 
+:root[data-theme="dark"] .stat-item {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .stat-item strong {
+  color: var(--status-verfügbar);
+}
+
 .hint {
   font-size: 0.8rem;
   color: var(--muted);
