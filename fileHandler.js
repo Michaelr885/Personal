@@ -218,6 +218,12 @@ export function createMockDataset() {
       },
     ],
     qualifications: ["Monteur", "Schweißer", "Bauleiter", "Elektriker", "Lagerist"],
+    dashboard_abteilung_reihenfolge: [
+      "Mechanik",
+      "Steriltechnik",
+      "Kunststofftechnik und Gewerbe",
+      "Rohrfertigung",
+    ],
     assignments: [
       {
         ID: 1,
@@ -260,7 +266,7 @@ export function createMockDataset() {
 
 /**
  * @param {unknown} raw
- * @returns {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications:string[] } | null}
+ * @returns {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications:string[], dashboard_abteilung_reihenfolge:string[] } | null}
  */
 function normalizeDataset(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -273,6 +279,13 @@ function normalizeDataset(raw) {
   let qualifications = [];
   if (Array.isArray(o.qualifications)) {
     qualifications = o.qualifications
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean);
+  }
+  /** @type {string[]} */
+  let dashboard_abteilung_reihenfolge = [];
+  if (Array.isArray(o.dashboard_abteilung_reihenfolge)) {
+    dashboard_abteilung_reihenfolge = o.dashboard_abteilung_reihenfolge
       .map((x) => String(x ?? "").trim())
       .filter(Boolean);
   }
@@ -349,7 +362,7 @@ function normalizeDataset(raw) {
     if (row && typeof row === "object") /** @type {{ Reihenfolge: number }} */ (row).Reihenfolge = i;
   });
 
-  return { team_leaders, employees, projects, assignments, qualifications };
+  return { team_leaders, employees, projects, assignments, qualifications, dashboard_abteilung_reihenfolge };
 }
 
 export function isFileSystemAccessSupported() {
@@ -414,7 +427,7 @@ export async function linkLocalDataFile() {
 
 /**
  * Überschreibt die verknüpfte Datei vollständig (Auto-Save).
- * @param {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications?:string[] }} data
+ * @param {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications?:string[], dashboard_abteilung_reihenfolge?:string[] }} data
  */
 export async function saveDataToFile(data) {
   if (!dataFileHandle) {

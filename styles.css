@@ -269,12 +269,45 @@ code {
 .dashboard-abteilung__title {
   margin: 0 0 0.55rem;
   padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   text-align: center;
   font-size: 1.2rem;
   font-weight: 650;
   letter-spacing: 0.02em;
   line-height: 1.25;
   color: var(--abteilung-accent, var(--primary));
+}
+
+.dashboard-abteilung__name {
+  flex: 0 1 auto;
+}
+
+.dashboard-abteilung__drag-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -0.15rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.dashboard-abteilung__drag-handle[draggable="true"] {
+  cursor: grab;
+}
+
+.dashboard-abteilung__drag-handle[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.dashboard-abteilung-block.dashboard-abteilung--reorder-drag {
+  opacity: 0.92;
+  outline: 2px dashed var(--primary);
+  outline-offset: 3px;
 }
 
 .dashboard-teams-wrap .grid-dashboard {

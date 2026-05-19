@@ -6,6 +6,12 @@
     "Elektriker",
     "Lagerist"
   ],
+  "dashboard_abteilung_reihenfolge": [
+    "Mechanik",
+    "Steriltechnik",
+    "Kunststofftechnik und Gewerbe",
+    "Rohrfertigung"
+  ],
   "team_leaders": [
     {
       "ID": 1,

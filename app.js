@@ -116,9 +116,10 @@ function normalizeAllEmployeesShape() {
     emp.Urlaub_perioden = normalizeUrlaubPerioden(emp.Urlaub_perioden);
   }
   ensureStateQualifications();
+  ensureDashboardAbteilungReihenfolge();
 }
 
-/** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[], qualifications: string[] } | null} */
+/** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[], qualifications: string[], dashboard_abteilung_reihenfolge: string[] } | null} */
 let state = null;
 
 const UNDO_HISTORY_LIMIT = 80;
@@ -600,6 +601,47 @@ function reorderTeamLeadersOnDashboard(fromIdStr, toIdStr) {
     const live = state.team_leaders.find((x) => Number(x.ID) === Number(t.ID));
     if (live) live.Reihenfolge = i;
   });
+}
+
+/** Reihenfolge der Abteilungs-Blöcke im Dashboard; wird mit tatsächlich genutzten Abteilungen synchronisiert. */
+function ensureDashboardAbteilungReihenfolge() {
+  if (!state) return;
+  if (!Array.isArray(state.dashboard_abteilung_reihenfolge)) {
+    state.dashboard_abteilung_reihenfolge = [];
+  }
+  const sortedTls = teamLeadersSortedForDashboard();
+  /** @type {string[]} */
+  const inUse = [];
+  const seen = new Set();
+  for (const tl of sortedTls) {
+    const a = normalizeAbteilung(tl.Abteilung);
+    if (!seen.has(a)) {
+      seen.add(a);
+      inUse.push(a);
+    }
+  }
+  let order = state.dashboard_abteilung_reihenfolge
+    .map((x) => String(x ?? "").trim())
+    .filter(Boolean)
+    .filter((a) => inUse.includes(a));
+  for (const a of inUse) {
+    if (!order.includes(a)) order.push(a);
+  }
+  state.dashboard_abteilung_reihenfolge = order;
+}
+
+/** @param {string} fromAbt @param {string} toAbt */
+function reorderDashboardAbteilungen(fromAbt, toAbt) {
+  if (!state) return;
+  const from = String(fromAbt).trim();
+  const to = String(toAbt).trim();
+  if (!from || !to || from === to) return;
+  const arr = state.dashboard_abteilung_reihenfolge;
+  const fromIdx = arr.indexOf(from);
+  const toIdx = arr.indexOf(to);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
 }
 
 function employeeActiveOnProjectToday(empId) {
@@ -2093,7 +2135,8 @@ function dashboardTeamCardsUseNativeDrag() {
 /**
  * Mitarbeitende: immer ohne natives Drag (Pointer-Zug für Maus, Touch und Stift).
  * Teamkarten-Reihenfolge: natives HTML5-Drag nur auf `[data-dashboard-team-drag]` (Kopfzeile),
- * nicht auf der ganzen Karte — sonst startet der Browser beim Ziehen einer Person den Drag der Teamkarte.
+ * Abteilungs-Blöcke analog auf `[data-dashboard-abteilung-drag]` — nicht auf der ganzen Karte,
+ * sonst startet der Browser beim Ziehen einer Person den Drag der Teamkarte.
  */
 function applyDashboardDragMode(root) {
   const nativeTeam = dashboardTeamCardsUseNativeDrag();
@@ -2106,10 +2149,14 @@ function applyDashboardDragMode(root) {
   root.querySelectorAll("[data-dashboard-team-drag]").forEach((el) => {
     if (el instanceof HTMLElement) el.draggable = nativeTeam;
   });
+  root.querySelectorAll("[data-dashboard-abteilung-drag]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = nativeTeam;
+  });
 }
 
 function renderDashboard() {
   if (!state) return;
+  ensureDashboardAbteilungReihenfolge();
   const root = /** @type {HTMLElement} */ ($("#dashboard-content"));
   const today = todayISO();
 
@@ -2170,14 +2217,7 @@ function renderDashboard() {
       </article>`;
   }
 
-  const deptsOrdered = /** @type {string[]} */ ([]);
-  for (const abt of ABTEILUNGEN) {
-    if (sortedTls.some((tl) => normalizeAbteilung(tl.Abteilung) === abt)) deptsOrdered.push(abt);
-  }
-  for (const tl of sortedTls) {
-    const a = normalizeAbteilung(tl.Abteilung);
-    if (!deptsOrdered.includes(a)) deptsOrdered.push(a);
-  }
+  const deptsOrdered = [...state.dashboard_abteilung_reihenfolge];
 
   const teamSectionsHtml =
     deptsOrdered.length === 0
@@ -2188,8 +2228,12 @@ function renderDashboard() {
             if (!tls.length) return "";
             const accent = dashboardAbteilungAkzentfarbe(abt);
             const cards = tls.map((tl) => dashboardTeamCardArticleHtml(tl)).join("");
-            return `<section class="dashboard-abteilung-block" style="--abteilung-accent: ${accent}">
-        <h3 class="dashboard-abteilung__title">${escapeHtml(abt)}</h3>
+            const escAbt = escapeHtml(abt);
+            return `<section class="dashboard-abteilung-block" data-dashboard-abteilung="${escAbt}" data-drop-dashboard-abteilung="${escAbt}" style="--abteilung-accent: ${accent}">
+        <h3 class="dashboard-abteilung__title">
+          <span class="dashboard-abteilung__drag-handle" data-dashboard-abteilung-drag="1" title="Reihenfolge der Abteilungen ändern" aria-label="Abteilung ${escAbt} verschieben"><i class="fa-solid fa-grip-vertical" aria-hidden="true"></i></span>
+          <span class="dashboard-abteilung__name">${escAbt}</span>
+        </h3>
         <div class="grid-dashboard">${cards}</div>
       </section>`;
           })
@@ -2288,6 +2332,9 @@ function renderDashboard() {
       <div class="panel__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
       </div>
+      <p class="hint">
+        Reihenfolge der Blöcke: <strong>Griff</strong> (<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>) neben der Abteilungsüberschrift ziehen und auf eine andere Abteilung legen (wird in der Datei gespeichert).
+      </p>
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
     <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
@@ -4670,6 +4717,16 @@ function setupDashboardTouchDrag(view) {
   );
 }
 
+/** @param {DataTransfer | null} dt */
+function dashboardDataTransferTypes(dt) {
+  if (!dt || !dt.types) return [];
+  try {
+    return [...dt.types];
+  } catch {
+    return [];
+  }
+}
+
 function setupDashboardDnD() {
   const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
   if (!view || view.dataset.dashboardDnd === "1") return;
@@ -4702,6 +4759,18 @@ function setupDashboardDnD() {
       ev.dataTransfer.effectAllowed = "move";
       return;
     }
+    const abtDragEl =
+      ev.target instanceof Element ? ev.target.closest("[data-dashboard-abteilung-drag]") : null;
+    if (abtDragEl instanceof HTMLElement) {
+      const section = abtDragEl.closest("[data-dashboard-abteilung]");
+      if (!(section instanceof HTMLElement)) return;
+      const abt = section.getAttribute("data-dashboard-abteilung");
+      if (!abt) return;
+      section.classList.add("dashboard-abteilung--reorder-drag");
+      ev.dataTransfer.setData("application/x-dashboard-abteilung-reorder", abt);
+      ev.dataTransfer.effectAllowed = "move";
+      return;
+    }
     const teamDragEl =
       ev.target instanceof Element ? ev.target.closest("[data-dashboard-team-drag]") : null;
     if (teamDragEl instanceof HTMLElement) {
@@ -4712,16 +4781,27 @@ function setupDashboardDnD() {
       teamCard.classList.add("card-team--reorder-drag");
       ev.dataTransfer.setData("application/x-teamleader-reorder", tid);
       ev.dataTransfer.effectAllowed = "move";
+      return;
     }
   });
 
   view.addEventListener("dragend", () => {
     view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
     view.querySelectorAll(".card-team--reorder-drag").forEach((el) => el.classList.remove("card-team--reorder-drag"));
+    view
+      .querySelectorAll(".dashboard-abteilung--reorder-drag")
+      .forEach((el) => el.classList.remove("dashboard-abteilung--reorder-drag"));
+    clearDashboardDropZoneHighlight();
   });
 
   view.addEventListener("dragenter", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
+    const types = dashboardDataTransferTypes(ev.dataTransfer);
+    if (types.includes("application/x-dashboard-abteilung-reorder")) {
+      const abtZone = el?.closest("[data-drop-dashboard-abteilung]");
+      if (abtZone instanceof HTMLElement) ev.preventDefault();
+      return;
+    }
     const zone = /** @type {HTMLElement | null} */ (
       el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
@@ -4731,6 +4811,20 @@ function setupDashboardDnD() {
 
   view.addEventListener("dragover", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
+    const types = dashboardDataTransferTypes(ev.dataTransfer);
+    if (types.includes("application/x-dashboard-abteilung-reorder")) {
+      const abtZone = el?.closest("[data-drop-dashboard-abteilung]");
+      if (abtZone instanceof HTMLElement) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
+        if (dashboardDnDActiveZone && dashboardDnDActiveZone !== abtZone) {
+          dashboardDnDActiveZone.classList.remove("team-drop-zone--active");
+        }
+        dashboardDnDActiveZone = abtZone;
+        abtZone.classList.add("team-drop-zone--active");
+      }
+      return;
+    }
     const zone = /** @type {HTMLElement | null} */ (
       el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
@@ -4746,6 +4840,17 @@ function setupDashboardDnD() {
 
   view.addEventListener("dragleave", (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
+    const types = dashboardDataTransferTypes(ev.dataTransfer);
+    if (types.includes("application/x-dashboard-abteilung-reorder")) {
+      const zone = el?.closest("[data-drop-dashboard-abteilung]");
+      if (!(zone instanceof HTMLElement)) return;
+      const rel = /** @type {Node | null} */ (ev.relatedTarget);
+      if (!rel || !zone.contains(rel)) {
+        zone.classList.remove("team-drop-zone--active");
+        if (dashboardDnDActiveZone === zone) dashboardDnDActiveZone = null;
+      }
+      return;
+    }
     const zone = /** @type {HTMLElement | null} */ (
       el?.closest("[data-drop-absence], [data-drop-teamleader], [data-drop-unassigned]")
     );
@@ -4760,6 +4865,22 @@ function setupDashboardDnD() {
   view.addEventListener("drop", async (ev) => {
     const el = ev.target instanceof Element ? ev.target : null;
     ev.preventDefault();
+    const abtReorder = ev.dataTransfer.getData("application/x-dashboard-abteilung-reorder");
+    if (abtReorder && state) {
+      clearDashboardDropZoneHighlight();
+      const targetSection = el?.closest("[data-drop-dashboard-abteilung]");
+      const toAbt = targetSection?.getAttribute("data-drop-dashboard-abteilung");
+      if (toAbt && toAbt !== abtReorder) {
+        recordUndoSnapshot();
+        reorderDashboardAbteilungen(abtReorder, toAbt);
+        await persist();
+        renderDashboard();
+        if ($("#view-personnel").classList.contains("view--active")) {
+          renderPersonnelView();
+        }
+      }
+      return;
+    }
     const tlReorder = ev.dataTransfer.getData("application/x-teamleader-reorder");
     if (tlReorder && state) {
       clearDashboardDropZoneHighlight();
