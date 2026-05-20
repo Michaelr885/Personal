@@ -2841,6 +2841,9 @@ function refreshProjectGanttBarLabelRepeats() {
 
 function destroyGantt() {
   teardownProjectGanttBarLabelRepeats();
+  clearGanttBarSyncMoveListener();
+  ganttBarSyncArmed = false;
+  ganttBarSyncMoved = false;
   const wrap = /** @type {HTMLElement} */ ($("#gantt-container"));
   wrap.innerHTML = "";
   ganttInstance = null;
@@ -2917,18 +2920,46 @@ function scheduleSyncProjectDatesFromGanttBars() {
   });
 }
 
-/** Nur nach echtem Balken-Drag: sonst würde jedes document-mouseup (z. B. Scrollbar) sync → renderGantt → scrollLeft zurücksetzen. */
-let ganttBarPointerDownForDateSync = false;
+/** Nur nach echtem Balken-Zug (Pixelbewegung): sonst feuert document-pointerup nach einfachem Klick und triggert sync → renderGantt → Popup verschwindet sofort. */
+let ganttBarSyncArmed = false;
+let ganttBarSyncMoved = false;
+let ganttBarSyncLastX = 0;
+let ganttBarSyncLastY = 0;
+/** @type {null | (() => void)} */
+let ganttBarSyncMoveCleanup = null;
+
+function clearGanttBarSyncMoveListener() {
+  if (typeof ganttBarSyncMoveCleanup === "function") {
+    ganttBarSyncMoveCleanup();
+  }
+  ganttBarSyncMoveCleanup = null;
+}
 
 function onGanttBarPointerDownForDateSync(ev) {
   if (!(ev.target instanceof Element)) return;
   if (!ev.target.closest(".bar-wrapper")) return;
-  ganttBarPointerDownForDateSync = true;
+  ganttBarSyncArmed = true;
+  ganttBarSyncMoved = false;
+  ganttBarSyncLastX = ev.clientX;
+  ganttBarSyncLastY = ev.clientY;
+  clearGanttBarSyncMoveListener();
+  const onMove = (e) => {
+    if (!ganttBarSyncArmed) return;
+    const dx = e.clientX - ganttBarSyncLastX;
+    const dy = e.clientY - ganttBarSyncLastY;
+    if (dx * dx + dy * dy >= 9) ganttBarSyncMoved = true;
+  };
+  document.addEventListener("pointermove", onMove, { passive: true });
+  ganttBarSyncMoveCleanup = () => document.removeEventListener("pointermove", onMove);
 }
 
 function onDocumentReleaseSyncGanttProjectDates() {
-  if (!ganttBarPointerDownForDateSync) return;
-  ganttBarPointerDownForDateSync = false;
+  clearGanttBarSyncMoveListener();
+  if (!ganttBarSyncArmed) return;
+  ganttBarSyncArmed = false;
+  const should = ganttBarSyncMoved;
+  ganttBarSyncMoved = false;
+  if (!should) return;
   scheduleSyncProjectDatesFromGanttBars();
 }
 
@@ -3121,24 +3152,6 @@ function getProjectGanttConflictNameLines(p) {
   return [...unique].sort((a, b) => a.localeCompare(b, "de"));
 }
 
-/**
- * frappe-gantt 0.6: `bind_grid_click` schließt bei Klick auf `.grid-row`/`.grid-header` das Popup.
- * Balken liegen in einer Grid-Zeile – der Klick bubbelt zum SVG und schließt das Popup sofort nach dem Öffnen.
- * @param {HTMLElement} wrap `#gantt-container`
- */
-function bindGanttBarClickStopPropagationForPopup(wrap) {
-  const svg = wrap.querySelector("svg.gantt");
-  if (!svg) return;
-  /** @param {Event} ev */
-  const stop = (ev) => {
-    ev.stopPropagation();
-  };
-  for (const el of svg.querySelectorAll("g.bar-wrapper")) {
-    el.addEventListener("click", stop, false);
-    el.addEventListener("dblclick", stop, false);
-  }
-}
-
 function renderGanttCore() {
   if (!state) return;
   destroyGantt();
@@ -3201,7 +3214,6 @@ function renderGanttCore() {
       },
     });
     refreshProjectGanttBarLabelRepeats();
-    bindGanttBarClickStopPropagationForPopup(wrap);
     requestAnimationFrame(() => {
       scheduleLayoutProjectGanttBarLabelRepeats();
       requestAnimationFrame(() => scheduleLayoutProjectGanttBarLabelRepeats());
