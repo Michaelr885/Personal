@@ -5,8 +5,8 @@ import {
   getLinkedFileName,
 } from "./fileHandler.js";
 
-/** @typedef {{ von: string, bis: string|null }} Urlaubsperiode */
-/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_perioden: Urlaubsperiode[] }} Employee */
+/** @typedef {{ von: string, bis: string|null, Halber_Tag?: boolean }} Urlaubsperiode */
+/** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_halber_Tag?: boolean, Urlaub_perioden: Urlaubsperiode[] }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string, Abteilung:string, Reihenfolge:number }} TeamLeader */
 /** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
@@ -83,6 +83,14 @@ function normalizeAbteilung(raw) {
   return ABTEILUNGEN[0];
 }
 
+/** Ein Kalendertag: „Bis“ leer zählt wie nur „Von“. */
+function isSingleCalendarDayUrlaub(/** @type {string} */ von, /** @type {string|null|undefined} */ bis) {
+  if (!von || String(von).trim() === "") return false;
+  const b = bis == null || bis === "" ? null : String(bis).trim();
+  if (!b) return true;
+  return von === b;
+}
+
 /** @param {unknown} raw @returns {Urlaubsperiode[]} */
 function normalizeUrlaubPerioden(raw) {
   if (!Array.isArray(raw)) return [];
@@ -95,7 +103,12 @@ function normalizeUrlaubPerioden(raw) {
     if (!von) continue;
     const bisRaw = o.bis ?? o.Urlaub_bis ?? "";
     const bisStr = bisRaw == null || bisRaw === "" ? null : String(bisRaw).trim();
-    out.push({ von, bis: bisStr || null });
+    let Halber_Tag = Boolean(o.Halber_Tag ?? o.halber_Tag);
+    if (Halber_Tag && !isSingleCalendarDayUrlaub(von, bisStr)) Halber_Tag = false;
+    /** @type {Urlaubsperiode} */
+    const entry = { von, bis: bisStr || null };
+    if (Halber_Tag) entry.Halber_Tag = true;
+    out.push(entry);
   }
   return out;
 }
@@ -114,6 +127,9 @@ function normalizeAllEmployeesShape() {
     emp.Stufe = emp.Stufe != null && emp.Stufe !== "" ? String(emp.Stufe).trim() : "";
     emp.Abteilung = normalizeAbteilung(emp.Abteilung);
     emp.Urlaub_perioden = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+    if (emp.Urlaub_halber_Tag === true && !isSingleCalendarDayUrlaub(String(emp.Urlaub_ab ?? "").trim(), emp.Urlaub_bis)) {
+      emp.Urlaub_halber_Tag = false;
+    }
   }
   ensureStateQualifications();
   ensureDashboardAbteilungReihenfolge();
@@ -240,6 +256,7 @@ function initAppPreferences() {
     sel.addEventListener("change", () => {
       setFeierlandCode(sel.value);
       renderUrlaubPlan();
+      renderDashboard();
     });
   }
   const themeBtn = /** @type {HTMLButtonElement | null} */ (document.querySelector("#pref-theme-toggle"));
@@ -476,6 +493,27 @@ function getUrlaubRanges(emp) {
     ranges.push({ ab: String(p.von), bis });
   }
   return ranges;
+}
+
+/**
+ * Urlaubs-Zeiträge inkl. Halber-Tag-Metadaten (Statistik / Urlaubsplan).
+ * @param {Employee} emp
+ * @returns {{ ab: string; bis: string | null; halberTag: boolean; slot: "haupt" | "zusatz" }[]}
+ */
+function getUrlaubRangeEntries(emp) {
+  /** @type {{ ab: string; bis: string | null; halberTag: boolean; slot: "haupt" | "zusatz" }[]} */
+  const out = [];
+  if (emp.Urlaub_ab != null && emp.Urlaub_ab !== "") {
+    const bis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+    const halberTag = emp.Urlaub_halber_Tag === true && isSingleCalendarDayUrlaub(String(emp.Urlaub_ab), bis);
+    out.push({ ab: String(emp.Urlaub_ab), bis, halberTag, slot: "haupt" });
+  }
+  for (const p of normalizeUrlaubPerioden(emp.Urlaub_perioden)) {
+    const bis = p.bis != null && p.bis !== "" ? String(p.bis) : null;
+    const halberTag = !!p.Halber_Tag && isSingleCalendarDayUrlaub(p.von, bis);
+    out.push({ ab: String(p.von), bis, halberTag, slot: "zusatz" });
+  }
+  return out;
 }
 
 function bisNormUrlaub(/** @type {string|null|undefined} */ b) {
@@ -900,12 +938,32 @@ const URLAUB_GANTT_MODAL_HINT_NEW =
 const URLAUB_GANTT_MODAL_HINT_EDIT =
   "Sie bearbeiten einen <strong>bestehenden</strong> Zeitraum (Haupt-Urlaub oder Zusatzeintrag). Leeres „Bis“ = offenes Ende.";
 
-function urlaubPeriodRowTemplate(von = "", bis = "") {
+function refreshUrlaubPeriodRowHalbUI(row) {
+  const vonEl = row.querySelector(".js-u-von");
+  const bisEl = row.querySelector(".js-u-bis");
+  const wrap = row.querySelector(".js-urlaub-per-halb-wrap");
+  const halbCb = row.querySelector(".js-u-halb");
+  if (!(vonEl instanceof HTMLInputElement) || !(wrap instanceof HTMLElement) || !(halbCb instanceof HTMLInputElement)) return;
+  const von = vonEl.value.trim();
+  const bisRaw = bisEl instanceof HTMLInputElement ? bisEl.value.trim() : "";
+  const ok = !!von && isSingleCalendarDayUrlaub(von, bisRaw === "" ? null : bisRaw);
+  wrap.hidden = !ok;
+  if (!ok) halbCb.checked = false;
+}
+
+function urlaubPeriodRowTemplate(von = "", bis = "", halber = false) {
   const v = von ? escapeHtml(von) : "";
   const b = bis ? escapeHtml(bis) : "";
+  const halbChecked = halber ? " checked" : "";
   return `<div class="urlaub-per-row form-grid form-grid--wide form-section__grid">
     <label>Weiterer Urlaub von (optional)<input type="date" class="js-u-von" value="${v}" /></label>
     <label>Bis (optional)<input type="date" class="js-u-bis" value="${b}" /></label>
+    <label class="span-2 urlaub-per-halb-wrap js-urlaub-per-halb-wrap" hidden>
+      <span class="pool-filter-opt" style="margin:0;display:flex;align-items:flex-start;gap:0.5rem">
+        <input type="checkbox" class="js-u-halb"${halbChecked} />
+        <span>Halber Urlaubstag (0,5 Arbeitstage)</span>
+      </span>
+    </label>
     <div class="form-actions--inline"><button type="button" class="btn btn--ghost btn--tiny js-u-remove" title="Zeile entfernen"><i class="fa-solid fa-xmark"></i> Entfernen</button></div>
   </div>`;
 }
@@ -914,7 +972,12 @@ function renderUrlaubPeriodenContainer(hostId, /** @type {Urlaubsperiode[]} */ p
   const host = document.getElementById(hostId);
   if (!(host instanceof HTMLElement)) return;
   const list = periods && periods.length ? periods : [];
-  host.innerHTML = list.length ? list.map((p) => urlaubPeriodRowTemplate(p.von, p.bis ?? "")).join("") : "";
+  host.innerHTML = list.length
+    ? list.map((p) => urlaubPeriodRowTemplate(p.von, p.bis ?? "", !!p.Halber_Tag)).join("")
+    : "";
+  for (const row of host.querySelectorAll(".urlaub-per-row")) {
+    if (row instanceof HTMLElement) refreshUrlaubPeriodRowHalbUI(row);
+  }
 }
 
 function collectUrlaubPeriodenFromContainer(hostId) {
@@ -929,7 +992,15 @@ function collectUrlaubPeriodenFromContainer(hostId) {
     const bisRaw = bisEl instanceof HTMLInputElement ? bisEl.value.trim() : "";
     if (!von && !bisRaw) continue;
     if (!von) continue;
-    out.push({ von, bis: bisRaw === "" ? null : bisRaw });
+    const halbCb = row.querySelector(".js-u-halb");
+    const Halber_Tag =
+      halbCb instanceof HTMLInputElement &&
+      halbCb.checked &&
+      isSingleCalendarDayUrlaub(von, bisRaw === "" ? null : bisRaw);
+    /** @type {Urlaubsperiode} */
+    const entry = { von, bis: bisRaw === "" ? null : bisRaw };
+    if (Halber_Tag) entry.Halber_Tag = true;
+    out.push(entry);
   }
   return out;
 }
@@ -1124,6 +1195,30 @@ function bundeslandHolidayNameDE(iso) {
   return holidayMapCached(y, getFeierlandCode()).get(key) ?? null;
 }
 
+/**
+ * Nächster gesetzlicher Feiertag im gewählten Bundesland (heute eingeschlossen).
+ * @returns {{ iso: string; name: string; daysUntil: number } | null}
+ */
+function getNextHoliday(maxScanDays = 800) {
+  const land = getFeierlandCode();
+  let d = todayISO();
+  for (let i = 0; i < maxScanDays; i++) {
+    const key = String(d).slice(0, 10);
+    const y = Number(key.slice(0, 4));
+    if (!Number.isFinite(y)) break;
+    const name = holidayMapCached(y, land).get(key);
+    if (name) {
+      const du = daysUntilISODate(key);
+      const daysUntil = du == null || !Number.isFinite(du) ? 0 : du;
+      return { iso: key, name: String(name), daysUntil };
+    }
+    const nxt = addCalendarDaysToISO(d, 1);
+    if (!nxt || nxt <= d) break;
+    d = nxt;
+  }
+  return null;
+}
+
 function isLandPublicHolidayISO(iso) {
   return bundeslandHolidayNameDE(iso) != null;
 }
@@ -1200,44 +1295,20 @@ function clipUrlaubRangeToMonth(ab, bis, monthStart, monthEnd) {
   return clipUrlaubRangeToWindow(ab, bis, monthStart, monthEnd);
 }
 
-/** Inklusive Kalendertage zwischen zwei ISO-Daten (yyyy-mm-dd). */
-function calendarDaysInclusive(isoStart, isoEnd) {
-  const [ya, ma, da] = String(isoStart).split("-").map(Number);
-  const [yb, mb, db] = String(isoEnd).split("-").map(Number);
-  const t0 = new Date(ya, ma - 1, da).setHours(12, 0, 0, 0);
-  const t1 = new Date(yb, mb - 1, db).setHours(12, 0, 0, 0);
-  return Math.round((t1 - t0) / 86400000) + 1;
-}
-
-/** Überlappende oder aneinander grenzende Urlaubsclips zusammenführen (keine Doppelzählung). */
-function mergeInclusiveUrlaubClips(/** @type {{ start: string; end: string }[]} */ clips) {
-  if (!clips.length) return [];
-  const sorted = clips.slice().sort((a, b) => a.start.localeCompare(b.start));
-  /** @type {{ start: string; end: string }[]} */
-  const out = [{ ...sorted[0] }];
-  for (let i = 1; i < sorted.length; i++) {
-    const c = sorted[i];
-    const last = out[out.length - 1];
-    const lastPlus = addCalendarDaysToISO(last.end, 1);
-    if (lastPlus != null && c.start <= lastPlus) {
-      if (c.end > last.end) last.end = c.end;
+/** Urlaubs-Arbeitstage (Mo–Fr ohne Feiertage/Betriebs-Dez.) im Fenster [winStart, winEnd]; halbe Tage als 0,5. */
+function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
+  let sum = 0;
+  for (const r of getUrlaubRangeEntries(emp)) {
+    const clip = clipUrlaubRangeToWindow(r.ab, r.bis, winStart, winEnd);
+    if (!clip) continue;
+    if (r.halberTag) {
+      if (clip.start !== clip.end) continue;
+      if (countsAsUrlaubArbeitstag(clip.start)) sum += 0.5;
     } else {
-      out.push({ ...c });
+      sum += countUrlaubWorkdaysInInclusiveRange(clip.start, clip.end);
     }
   }
-  return out;
-}
-
-/** Urlaubs-Arbeitstage (Mo–Fr ohne gesetzliche Feiertage des Bundeslandes, ohne 24./30. Dez. betrieblich frei) im Fenster [winStart, winEnd]. */
-function countVacationDaysInWindow(/** @type {Employee} */ emp, winStart, winEnd) {
-  /** @type {{ start: string; end: string }[]} */
-  const clips = [];
-  for (const r of getUrlaubRanges(emp)) {
-    const clip = clipUrlaubRangeToWindow(r.ab, r.bis, winStart, winEnd);
-    if (clip) clips.push(clip);
-  }
-  const merged = mergeInclusiveUrlaubClips(clips);
-  return merged.reduce((sum, iv) => sum + countUrlaubWorkdaysInInclusiveRange(iv.start, iv.end), 0);
+  return sum;
 }
 
 /** @param {string} iso */
@@ -1245,10 +1316,18 @@ function dayOfMonthFromISO(iso) {
   return Number(String(iso).slice(8, 10)) || 1;
 }
 
+/** Anzeige von Urlaubsstatistik-Zahlen (inkl. 0,5). */
+function formatUrlaubStatNumber(/** @type {number} */ n) {
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n % 1) < 1e-9) return String(Math.round(n));
+  const s = n.toFixed(1);
+  return s.replace(".", ",");
+}
+
 /**
  * Überlappende Urlaubsbalken auf Zeilen verteilen (grid-row).
- * @param {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]} segs gs erster Tag (1…31), ge exklusiv
- * @returns {{ gs: number; ge: number; row: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]}
+ * @param {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz"; halber?: boolean }[]} segs gs erster Tag (1…31), ge exklusiv
+ * @returns {{ gs: number; ge: number; row: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz"; halber: boolean }[]}
  */
 function stackVacationBars(segs) {
   const sorted = segs.map((s) => ({
@@ -1257,6 +1336,7 @@ function stackVacationBars(segs) {
     rangeVon: s.rangeVon,
     rangeBis: s.rangeBis,
     slot: s.slot,
+    halber: !!s.halber,
     row: 1,
   }));
   /** @type {{ gs: number; ge: number }[][]} */
@@ -1390,24 +1470,23 @@ function renderUrlaubPlan() {
   const trackColBgsHtml = trackColBgs.join("");
 
   const rows = employees.map((emp) => {
-    const ranges = getUrlaubRanges(emp);
-    const hasMain = emp.Urlaub_ab != null && emp.Urlaub_ab !== "";
-    /** @type {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz" }[]} */
+    const entries = getUrlaubRangeEntries(emp);
+    /** @type {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz"; halber: boolean }[]} */
     const rawSegs = [];
-    for (let ri = 0; ri < ranges.length; ri++) {
-      const r = ranges[ri];
+    for (let ri = 0; ri < entries.length; ri++) {
+      const r = entries[ri];
       const clip = clipUrlaubRangeToMonth(r.ab, r.bis, monthStart, monthEnd);
       if (!clip) continue;
       const gs = dayOfMonthFromISO(clip.start);
       const ge = dayOfMonthFromISO(clip.end) + 1;
-      const isMain = hasMain && ri === 0;
       const rangeBis = r.bis == null ? "" : String(r.bis);
       rawSegs.push({
         gs,
         ge,
         rangeVon: r.ab,
         rangeBis,
-        slot: isMain ? "haupt" : "zusatz",
+        slot: r.slot,
+        halber: r.halberTag,
       });
     }
     const segs = stackVacationBars(rawSegs);
@@ -1420,9 +1499,12 @@ function renderUrlaubPlan() {
                 ? `${formatDateDE(s.rangeVon)}–… (Bearbeiten)`
                 : `${formatDateDE(s.rangeVon)}–${formatDateDE(s.rangeBis)}`;
             const dbAttr = escapeHtml(s.rangeBis);
-            return `<div class="urlaub-bar" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(
+            const halfCls = s.halber ? " urlaub-bar--half" : "";
+            return `<div class="urlaub-bar${halfCls}" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(
               fullTitle
-            )}" data-urlaub-slot="${s.slot}" data-urlaub-von="${escapeHtml(s.rangeVon)}" data-urlaub-bis="${dbAttr}"></div>`;
+            )}" data-urlaub-slot="${s.slot}" data-urlaub-von="${escapeHtml(s.rangeVon)}" data-urlaub-bis="${dbAttr}" data-urlaub-halb="${
+              s.halber ? "1" : ""
+            }"></div>`;
           })
           .join("")
       : '<span class="hint urlaub-plan__empty">kein Urlaub</span>';
@@ -1445,13 +1527,13 @@ function renderUrlaubPlan() {
       for (let m0 = 0; m0 < 12; m0++) {
         const { start: ms, end: me } = monthRangeISO(y, m0);
         const n = countVacationDaysInWindow(emp, ms, me);
-        cells.push(`<td class="urlaub-summary__num">${n}</td>`);
+        cells.push(`<td class="urlaub-summary__num">${escapeHtml(formatUrlaubStatNumber(n))}</td>`);
       }
       const yTotal = countVacationDaysInWindow(emp, `${y}-01-01`, `${y}-12-31`);
       return `<tr>
         <td class="emp-qual-surface" style="--qh:${empQualHue(emp.Qualifikation)}">${escapeHtml(`${emp.Nachname}, ${emp.Vorname}`)}</td>
         ${cells.join("")}
-        <td class="urlaub-summary__num urlaub-summary__num--sum">${yTotal}</td>
+        <td class="urlaub-summary__num urlaub-summary__num--sum">${escapeHtml(formatUrlaubStatNumber(yTotal))}</td>
       </tr>`;
     })
     .join("");
@@ -1479,7 +1561,7 @@ function renderUrlaubPlan() {
             </button>
           </span>
         </h3>
-        <p class="hint">Arbeitstage für <strong>${escapeHtml(feierlandDisplayName(getFeierlandCode()))}</strong> (ohne Sa/So, ohne gesetzliche Feiertage dort, ohne 24./30. Dezember betrieblich frei) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
+        <p class="hint">Arbeitstage für <strong>${escapeHtml(feierlandDisplayName(getFeierlandCode()))}</strong> (ohne Sa/So, ohne gesetzliche Feiertage dort, ohne 24./30. Dezember betrieblich frei; <strong>halbe Urlaubstage</strong> als 0,5) pro Kalendermonat wie im Raster oben; letzte Spalte = Summe Jahr. Pfeile: Jahr wechseln.</p>
         <div class="table-wrap urlaub-year-table-wrap">
           <table class="data-table urlaub-summary-table urlaub-year-table">
             <thead><tr><th>Mitarbeitende/r</th>${monthHeadCells.join("")}<th class="urlaub-year-th-sum">Σ</th></tr></thead>
@@ -1533,6 +1615,22 @@ function setupUrlaubView() {
   }
 }
 
+function syncUrlaubGanttHalberTagWrapVisibility() {
+  const wrap = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-halber-wrap"));
+  const halbCb = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-halber-tag"));
+  if (!wrap || !halbCb) return;
+  const vAb = readOptionalISODateFromInput("#urlaub-gantt-block-von");
+  if (!vAb) {
+    wrap.hidden = true;
+    halbCb.checked = false;
+    return;
+  }
+  const bRaw = readOptionalISODateFromInput("#urlaub-gantt-block-bis");
+  const same = !bRaw || bRaw === "" || bRaw === vAb;
+  wrap.hidden = !same;
+  if (!same) halbCb.checked = false;
+}
+
 function closeUrlaubGanttBlockModal() {
   const slotInp = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"));
   const vonInp = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-von"));
@@ -1540,6 +1638,10 @@ function closeUrlaubGanttBlockModal() {
   if (slotInp) slotInp.value = "";
   if (vonInp) vonInp.value = "";
   if (bisInp) bisInp.value = "";
+  const halbCb = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-halber-tag"));
+  if (halbCb) halbCb.checked = false;
+  const halbWrap = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-halber-wrap"));
+  if (halbWrap) halbWrap.hidden = true;
   const titleEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-title"));
   if (titleEl) titleEl.textContent = "Urlaub eintragen";
   const hintEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-save-hint"));
@@ -1554,7 +1656,7 @@ function closeUrlaubGanttBlockModal() {
  * @param {number} empId
  * @param {string} vonISO
  * @param {string} bisISO Wert fürs Bis-Feld (leer = offenes Ende)
- * @param {{ slot: "haupt" | "zusatz"; von: string; bis: string | null } | null} [editMeta]
+ * @param {{ slot: "haupt" | "zusatz"; von: string; bis: string | null; halberTag?: boolean } | null} [editMeta]
  */
 function openUrlaubGanttBlockModal(empId, vonISO, bisISO, editMeta = null) {
   const emp = getEmployee(empId);
@@ -1571,23 +1673,40 @@ function openUrlaubGanttBlockModal(empId, vonISO, bisISO, editMeta = null) {
   const origBis = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-bis"));
   const titleEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-title"));
   const hintEl = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-save-hint"));
+  const halbCb = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-halber-tag"));
   if (editMeta) {
     if (origSlot) origSlot.value = editMeta.slot;
     if (origVon) origVon.value = editMeta.von;
     if (origBis) origBis.value = editMeta.bis == null ? "" : String(editMeta.bis);
     if (titleEl) titleEl.textContent = "Urlaub bearbeiten";
     if (hintEl) hintEl.innerHTML = URLAUB_GANTT_MODAL_HINT_EDIT;
+    if (halbCb) {
+      if (typeof editMeta.halberTag === "boolean") {
+        halbCb.checked = editMeta.halberTag;
+      } else if (editMeta.slot === "haupt") {
+        halbCb.checked =
+          emp.Urlaub_halber_Tag === true &&
+          isSingleCalendarDayUrlaub(String(emp.Urlaub_ab ?? "").trim(), emp.Urlaub_bis);
+      } else {
+        const np = normalizeUrlaubPerioden(emp.Urlaub_perioden).find(
+          (p) => p.von === editMeta.von && bisNormUrlaub(p.bis) === bisNormUrlaub(editMeta.bis)
+        );
+        halbCb.checked = !!np?.Halber_Tag;
+      }
+    }
   } else {
     if (origSlot) origSlot.value = "";
     if (origVon) origVon.value = "";
     if (origBis) origBis.value = "";
     if (titleEl) titleEl.textContent = "Urlaub eintragen";
     if (hintEl) hintEl.innerHTML = URLAUB_GANTT_MODAL_HINT_NEW;
+    if (halbCb) halbCb.checked = false;
   }
   const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
   const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
   if (bd) bd.hidden = false;
   if (md) md.hidden = false;
+  syncUrlaubGanttHalberTagWrapVisibility();
   vEl?.focus();
 }
 
@@ -1614,6 +1733,7 @@ function setupUrlaubGanttBlockModal() {
         slot: /** @type {"haupt" | "zusatz"} */ (slot),
         von,
         bis: bisNull,
+        halberTag: bar.getAttribute("data-urlaub-halb") === "1",
       });
       return;
     }
@@ -1635,6 +1755,13 @@ function setupUrlaubGanttBlockModal() {
   const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
   if (!form || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
+  if (!form.dataset.halberListeners) {
+    form.dataset.halberListeners = "1";
+    $("#urlaub-gantt-block-von")?.addEventListener("input", syncUrlaubGanttHalberTagWrapVisibility);
+    $("#urlaub-gantt-block-von")?.addEventListener("change", syncUrlaubGanttHalberTagWrapVisibility);
+    $("#urlaub-gantt-block-bis")?.addEventListener("input", syncUrlaubGanttHalberTagWrapVisibility);
+    $("#urlaub-gantt-block-bis")?.addEventListener("change", syncUrlaubGanttHalberTagWrapVisibility);
+  }
   cancel?.addEventListener("click", closeUrlaubGanttBlockModal);
   bd?.addEventListener("click", (e) => {
     if (e.target === bd) closeUrlaubGanttBlockModal();
@@ -1655,6 +1782,17 @@ function setupUrlaubGanttBlockModal() {
       await openModal(
         "Datum prüfen",
         "<div>„Bis“ darf nicht vor „Von“ liegen.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    const halbWrap = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-halber-wrap"));
+    const halbCb = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-halber-tag"));
+    const wantHalb = !!(halbCb?.checked && halbWrap && !halbWrap.hidden);
+    if (wantHalb && !isSingleCalendarDayUrlaub(vAb, vBis)) {
+      await openModal(
+        "Halber Urlaubstag",
+        "<div>„Halber Tag“ ist nur zulässig, wenn „Von“ und „Bis“ dasselbe Kalenderdatum sind oder „Bis“ leer bleibt.</div>",
         { variant: "info", confirmText: "Verstanden" }
       );
       return;
@@ -1697,6 +1835,7 @@ function setupUrlaubGanttBlockModal() {
         recordUndoSnapshot();
         emp.Urlaub_ab = vAb;
         emp.Urlaub_bis = vBis;
+        emp.Urlaub_halber_Tag = wantHalb && isSingleCalendarDayUrlaub(vAb, vBis);
       } else {
         const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
         const oi = normalized.findIndex(
@@ -1711,12 +1850,17 @@ function setupUrlaubGanttBlockModal() {
           return;
         }
         recordUndoSnapshot();
-        normalized[oi] = { von: vAb, bis: vBis };
+        /** @type {Urlaubsperiode} */
+        const np = { von: vAb, bis: vBis };
+        if (wantHalb && isSingleCalendarDayUrlaub(vAb, vBis)) np.Halber_Tag = true;
+        normalized[oi] = np;
         emp.Urlaub_perioden = normalized;
       }
     } else {
       recordUndoSnapshot();
-      const period = /** @type {Urlaubsperiode} */ ({ von: vAb, bis: vBis });
+      /** @type {Urlaubsperiode} */
+      const period = { von: vAb, bis: vBis };
+      if (wantHalb && isSingleCalendarDayUrlaub(vAb, vBis)) period.Halber_Tag = true;
       const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
       normalized.push(period);
       emp.Urlaub_perioden = normalized;
@@ -2321,6 +2465,16 @@ function renderDashboard() {
     )
     .join("");
 
+  const nextFeier = getNextHoliday();
+  const nextFeierBadge =
+    nextFeier == null
+      ? ""
+      : `<span class="badge dashboard-next-feier-badge" title="Datum: ${escapeHtml(nextFeier.iso)}">Nächster Feiertag: ${escapeHtml(
+          nextFeier.name
+        )} (${
+          nextFeier.daysUntil === 0 ? "heute" : nextFeier.daysUntil === 1 ? "morgen" : `in ${nextFeier.daysUntil} Tagen`
+        })</span>`;
+
   root.innerHTML = `
     <div class="panel panel--unassigned team-drop-zone" data-drop-unassigned="1">
       <div class="panel__head">
@@ -2344,8 +2498,9 @@ function renderDashboard() {
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
     <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
-      <div class="panel__head">
+      <div class="panel__head panel__head--wrap">
         <h2><i class="fa-solid fa-user-injured"></i> Abwesenheit melden</h2>
+        ${nextFeierBadge}
       </div>
       <p class="hint">
         Mitarbeitende aus einer Teamliste oder von „Ohne Teamleitung“ hierher ziehen. Anschließend wählen Sie
@@ -2720,6 +2875,38 @@ function setupProjectDropDelegation() {
   });
 }
 
+/** Krank- oder Urlaubs-Kalender: Abwesenheit an dayISO (Status-Feld egal). */
+function isEmployeeCalendarAbsentOnDay(emp, dayISO) {
+  if (isDayInAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) return true;
+  if (isDayInAnyUrlaubRange(dayISO, emp)) return true;
+  return false;
+}
+
+/** Mindestens eine Projektzuweisung überlappt den Projektzeitraum und liegt auf einem Abwesenheitstag der Person. */
+function projectHasAssignmentAbsenceConflict(p) {
+  if (!state) return false;
+  const pStart = p.Startdatum;
+  const pEnd = p.Enddatum;
+  for (const a of state.assignments) {
+    if (Number(a.Project_ID) !== Number(p.ID)) continue;
+    if (!rangesOverlap(a.Startdatum, a.Enddatum, pStart, pEnd)) continue;
+    const emp = getEmployee(a.Employee_ID);
+    if (!emp) continue;
+    const s = a.Startdatum > pStart ? a.Startdatum : pStart;
+    const e = a.Enddatum < pEnd ? a.Enddatum : pEnd;
+    if (s > e) continue;
+    let cur = s;
+    let guard = 0;
+    while (cur <= e && guard++ < 4000) {
+      if (isEmployeeCalendarAbsentOnDay(emp, cur)) return true;
+      const nxt = addCalendarDaysToISO(cur, 1);
+      if (!nxt || nxt <= cur) break;
+      cur = nxt;
+    }
+  }
+  return false;
+}
+
 function renderGanttCore() {
   if (!state) return;
   destroyGantt();
@@ -2734,13 +2921,15 @@ function renderGanttCore() {
 
   const tasks = state.projects.map((p) => {
     const mod = ((Number(p.ID) - 1) % 5) + 1;
+    const conflict = projectHasAssignmentAbsenceConflict(p);
+    const cls = conflict ? `gantt-p${mod} gantt-conflict` : `gantt-p${mod}`;
     return {
       id: String(p.ID),
       name: p.Name,
       start: p.Startdatum,
       end: p.Enddatum,
       progress: 0,
-      custom_class: `gantt-p${mod}`,
+      custom_class: cls,
     };
   });
 
@@ -3812,7 +4001,14 @@ function loadEmployeeIntoForm(id) {
       e.Urlaub_ab != null && e.Urlaub_ab !== "" ? String(e.Urlaub_ab) : "";
     /** @type {HTMLInputElement} */ ($("#emp-urlaub-bis")).value =
       e.Urlaub_bis != null && e.Urlaub_bis !== "" ? String(e.Urlaub_bis) : "";
+    const uHalb = /** @type {HTMLInputElement | null} */ ($("#emp-urlaub-halber-tag"));
+    if (uHalb) {
+      uHalb.checked =
+        e.Urlaub_halber_Tag === true &&
+        isSingleCalendarDayUrlaub(String(e.Urlaub_ab ?? "").trim(), e.Urlaub_bis);
+    }
     renderUrlaubPeriodenContainer("emp-urlaub-perioden", e.Urlaub_perioden || []);
+    syncPersonnelMainUrlaubHalberWrap("emp");
     $("#employee-form-title").innerHTML =
       '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
     syncEditAbsenceHint();
@@ -3838,6 +4034,8 @@ function resetEmployeeForm() {
   /** @type {HTMLFormElement} */ ($("#employee-form")).reset();
   /** @type {HTMLInputElement} */ ($("#emp-id")).value = "";
   renderUrlaubPeriodenContainer("emp-urlaub-perioden", []);
+  syncPersonnelMainUrlaubHalberWrap("emp");
+  syncPersonnelMainUrlaubHalberWrap("new-emp");
   $("#employee-form-title").innerHTML =
     '<i class="fa-solid fa-user-pen"></i> Mitarbeitende bearbeiten';
   syncEditAbsenceHint();
@@ -3938,20 +4136,59 @@ function renderPersonnelView() {
   }
 }
 
+function syncPersonnelMainUrlaubHalberWrap(which) {
+  const ab = readOptionalISODateFromInput(`#${which}-urlaub-ab`);
+  const bis = readOptionalISODateFromInput(`#${which}-urlaub-bis`);
+  const wrap = /** @type {HTMLElement | null} */ ($(`#${which}-urlaub-halber-wrap`));
+  const cb = /** @type {HTMLInputElement | null} */ ($(`#${which}-urlaub-halber-tag`));
+  if (!wrap || !cb) return;
+  const ok = !!ab && isSingleCalendarDayUrlaub(ab, bis || null);
+  wrap.hidden = !ok;
+  if (!ok) cb.checked = false;
+}
+
+function bindPersonnelMainUrlabHalbListenersOnce() {
+  const ws = /** @type {HTMLElement | null} */ ($("#app-workspace"));
+  if (!ws || ws.dataset.personnelMainHalb === "1") return;
+  ws.dataset.personnelMainHalb = "1";
+  for (const id of ["emp-urlaub-ab", "emp-urlaub-bis", "new-emp-urlaub-ab", "new-emp-urlaub-bis"]) {
+    const el = document.getElementById(id);
+    if (!(el instanceof HTMLElement)) continue;
+    const sync = () => {
+      syncPersonnelMainUrlaubHalberWrap(id.startsWith("new-emp") ? "new-emp" : "emp");
+    };
+    el.addEventListener("input", sync);
+    el.addEventListener("change", sync);
+  }
+}
+
 function bindUrlaubPeriodenButtonsOnce() {
   const ws = /** @type {HTMLElement | null} */ ($("#app-workspace"));
   if (!ws || ws.dataset.urlaubPeriodUi === "1") return;
   ws.dataset.urlaubPeriodUi = "1";
+  ws.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    if (!t.classList.contains("js-u-von") && !t.classList.contains("js-u-bis")) return;
+    const row = t.closest(".urlaub-per-row");
+    if (row instanceof HTMLElement) refreshUrlaubPeriodRowHalbUI(row);
+  });
   ws.addEventListener("click", (ev) => {
     const t = ev.target instanceof Element ? ev.target : null;
     if (t?.closest("#emp-urlaub-add")) {
       ev.preventDefault();
-      document.getElementById("emp-urlaub-perioden")?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      const host = document.getElementById("emp-urlaub-perioden");
+      host?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      const row = host?.lastElementChild;
+      if (row instanceof HTMLElement) refreshUrlaubPeriodRowHalbUI(row);
       return;
     }
     if (t?.closest("#new-emp-urlaub-add")) {
       ev.preventDefault();
-      document.getElementById("new-emp-urlaub-perioden")?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      const host = document.getElementById("new-emp-urlaub-perioden");
+      host?.insertAdjacentHTML("beforeend", urlaubPeriodRowTemplate());
+      const row = host?.lastElementChild;
+      if (row instanceof HTMLElement) refreshUrlaubPeriodRowHalbUI(row);
       return;
     }
     const rem = t?.closest(".js-u-remove");
@@ -3964,6 +4201,7 @@ function bindUrlaubPeriodenButtonsOnce() {
 
 function setupPersonnelInteractions() {
   bindUrlaubPeriodenButtonsOnce();
+  bindPersonnelMainUrlabHalbListenersOnce();
   bindQualificationsTableOnce();
   const qualAddForm = /** @type {HTMLFormElement | null} */ (document.getElementById("qual-add-form"));
   if (qualAddForm && qualAddForm.dataset.bound !== "1") {
@@ -4049,6 +4287,17 @@ function setupPersonnelInteractions() {
       );
       return;
     }
+    const uHalbWrap = /** @type {HTMLElement | null} */ ($("#emp-urlaub-halber-wrap"));
+    const uHalbCb = /** @type {HTMLInputElement | null} */ ($("#emp-urlaub-halber-tag"));
+    const uHalbChecked = !!(uHalbCb?.checked && uHalbWrap && !uHalbWrap.hidden);
+    if (uHalbChecked && !isSingleCalendarDayUrlaub(uAb || "", uBis)) {
+      await openModal(
+        "Halber Urlaubstag",
+        "<div>„Halber Tag“ ist nur bei einem einzelnen Kalendertag möglich (gleiches „Von“/„Bis“ oder leeres „Bis“).</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const uPeriods = collectUrlaubPeriodenFromContainer("emp-urlaub-perioden");
     for (const p of uPeriods) {
       if (!validateUrlaubPeriodOrder(p.von, p.bis)) {
@@ -4075,6 +4324,7 @@ function setupPersonnelInteractions() {
       Krank_bis: kBis,
       Urlaub_ab: uAb,
       Urlaub_bis: uBis,
+      Urlaub_halber_Tag: !!(uAb && uHalbChecked && isSingleCalendarDayUrlaub(uAb, uBis)),
       Urlaub_perioden: uPeriods,
     };
     const idx = state.employees.findIndex((e) => Number(e.ID) === Number(existingId));
@@ -4116,6 +4366,17 @@ function setupPersonnelInteractions() {
       );
       return;
     }
+    const uHalbWrapN = /** @type {HTMLElement | null} */ ($("#new-emp-urlaub-halber-wrap"));
+    const uHalbCbN = /** @type {HTMLInputElement | null} */ ($("#new-emp-urlaub-halber-tag"));
+    const uHalbCheckedN = !!(uHalbCbN?.checked && uHalbWrapN && !uHalbWrapN.hidden);
+    if (uHalbCheckedN && !isSingleCalendarDayUrlaub(uAbN || "", uBisN)) {
+      await openModal(
+        "Halber Urlaubstag",
+        "<div>„Halber Tag“ ist nur bei einem einzelnen Kalendertag möglich (gleiches „Von“/„Bis“ oder leeres „Bis“).</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
     const uPeriodsN = collectUrlaubPeriodenFromContainer("new-emp-urlaub-perioden");
     for (const p of uPeriodsN) {
       if (!validateUrlaubPeriodOrder(p.von, p.bis)) {
@@ -4146,6 +4407,7 @@ function setupPersonnelInteractions() {
       Krank_bis: kBisN,
       Urlaub_ab: uAbN,
       Urlaub_bis: uBisN,
+      Urlaub_halber_Tag: !!(uAbN && uHalbCheckedN && isSingleCalendarDayUrlaub(uAbN, uBisN)),
       Urlaub_perioden: uPeriodsN,
       Rückkehr_erwartet_am: null,
       Abwesenheit_geplant_ab: null,
@@ -4157,6 +4419,7 @@ function setupPersonnelInteractions() {
     await syncEmployeesThenPersist();
     /** @type {HTMLFormElement} */ ($("#new-employee-form")).reset();
     renderUrlaubPeriodenContainer("new-emp-urlaub-perioden", []);
+    syncPersonnelMainUrlaubHalberWrap("new-emp");
     fillNewEmployeeSelects();
     renderPersonnelView();
     renderDashboard();

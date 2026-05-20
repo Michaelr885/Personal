@@ -471,6 +471,12 @@
                   </span>
                   <input type="date" id="new-emp-urlaub-bis" />
                 </label>
+                <label class="span-2 urlaub-halber-main-wrap" id="new-emp-urlaub-halber-wrap" hidden>
+                  <span class="pool-filter-opt" style="margin: 0; display: flex; align-items: flex-start; gap: 0.5rem">
+                    <input type="checkbox" id="new-emp-urlaub-halber-tag" />
+                    <span>Halber Urlaubstag (Haupt-Urlaub, 0,5 AT; nur ein Kalendertag)</span>
+                  </span>
+                </label>
                     <p class="form-range-head span-2">Weitere Urlaubszeiträume (optional)</p>
                     <p class="hint span-2">
                       Für mehrere Urlaubsblöcke im Jahr: Zeilen hinzufügen (Von–Bis). Der Haupt-Urlaub oben bleibt erhalten.
@@ -587,6 +593,12 @@
                     </span>
                   </span>
                   <input type="date" id="emp-urlaub-bis" />
+                </label>
+                <label class="span-2 urlaub-halber-main-wrap" id="emp-urlaub-halber-wrap" hidden>
+                  <span class="pool-filter-opt" style="margin: 0; display: flex; align-items: flex-start; gap: 0.5rem">
+                    <input type="checkbox" id="emp-urlaub-halber-tag" />
+                    <span>Halber Urlaubstag (Haupt-Urlaub, 0,5 AT; nur ein Kalendertag)</span>
+                  </span>
                 </label>
                     <p class="form-range-head span-2">Weitere Urlaubszeiträume (optional)</p>
                     <p class="hint span-2">
@@ -829,6 +841,12 @@
           <label>
             Bis (letzter Urlaubstag, optional)
             <input type="date" id="urlaub-gantt-block-bis" />
+          </label>
+          <label class="span-2 urlaub-halber-main-wrap" id="urlaub-gantt-block-halber-wrap" hidden>
+            <span class="pool-filter-opt" style="margin: 0; display: flex; align-items: flex-start; gap: 0.5rem">
+              <input type="checkbox" id="urlaub-gantt-block-halber-tag" />
+              <span>Halber Urlaubstag (0,5 Arbeitstage; nur ein Kalendertag: gleiches „Von“/„Bis“ oder „Bis“ leer)</span>
+            </span>
           </label>
           <p class="hint span-2" id="urlaub-gantt-block-save-hint">
             Wird als <strong>weiterer Urlaubszeitraum</strong> gespeichert (wie in der Personalverwaltung). Leeres

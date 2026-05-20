@@ -306,6 +306,7 @@ function normalizeDataset(raw) {
     if (e.Krank_bis === undefined) e.Krank_bis = null;
     if (e.Urlaub_ab === undefined) e.Urlaub_ab = null;
     if (e.Urlaub_bis === undefined) e.Urlaub_bis = null;
+    if (e.Urlaub_halber_Tag === undefined) e.Urlaub_halber_Tag = false;
     if (e.Urlaub_perioden === undefined || !Array.isArray(e.Urlaub_perioden)) e.Urlaub_perioden = [];
     if (e.Abteilung === undefined || e.Abteilung === null || String(e.Abteilung).trim() === "") {
       e.Abteilung = "Mechanik";

@@ -1453,6 +1453,17 @@ textarea {
 .gantt .bar-wrapper.gantt-p5 .bar {
   fill: #db2777;
 }
+
+.gantt .bar-wrapper.gantt-conflict .bar {
+  stroke: #dc2626;
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 1px rgba(220, 38, 38, 0.85));
+}
+
+.gantt .bar-wrapper.gantt-conflict .bar-progress {
+  fill: rgba(254, 226, 226, 0.45);
+}
+
 .gantt .bar-progress {
   fill: rgba(255, 255, 255, 0.35);
 }
@@ -1667,6 +1678,19 @@ textarea {
   min-height: 13px;
   margin: 0 1px;
   cursor: pointer;
+}
+
+.urlaub-bar.urlaub-bar--half {
+  min-height: 7px;
+  height: 50%;
+  align-self: center;
+  background-image: repeating-linear-gradient(
+    -36deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 255, 255, 0.28) 3px,
+    rgba(255, 255, 255, 0.28) 4px
+  );
 }
 
 .urlaub-plan__after {
@@ -2138,4 +2162,27 @@ textarea {
 :root[data-theme="dark"] .urlaub-plan__head-row {
   background: var(--surface);
   box-shadow: 0 1px 0 var(--border);
+}
+
+:root[data-theme="dark"] .gantt .bar-wrapper.gantt-conflict .bar {
+  stroke: #f87171;
+  filter: drop-shadow(0 0 2px rgba(248, 113, 113, 0.65));
+}
+
+:root[data-theme="dark"] .urlaub-bar.urlaub-bar--half {
+  background-image: repeating-linear-gradient(
+    -36deg,
+    transparent,
+    transparent 3px,
+    rgba(15, 23, 42, 0.5) 3px,
+    rgba(15, 23, 42, 0.5) 4px
+  );
+}
+
+.dashboard-next-feier-badge {
+  font-size: 0.82rem;
+  font-weight: 600;
+  max-width: min(100%, 36rem);
+  text-align: right;
+  line-height: 1.35;
 }
