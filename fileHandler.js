@@ -201,7 +201,7 @@ export function createMockDataset() {
         Startdatum: addDays(t, -20),
         Enddatum: addDays(t, 40),
         Benötigte_Qualifikationen: { Monteur: 3, Schweißer: 1, Bauleiter: 1 },
-        leiterId: "104",
+        leiterId: "2",
       },
       {
         ID: 2,
@@ -209,7 +209,7 @@ export function createMockDataset() {
         Startdatum: addDays(t, -5),
         Enddatum: addDays(t, 70),
         Benötigte_Qualifikationen: { Monteur: 4, Elektriker: 2, Bauleiter: 1 },
-        leiterId: "101",
+        leiterId: "1",
       },
       {
         ID: 3,
