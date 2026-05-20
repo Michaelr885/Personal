@@ -1489,7 +1489,11 @@ textarea {
 
 #view-urlaub .urlaub-toolbar-filters {
   margin-top: 0.35rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+#view-urlaub .urlaub-plan-wrap {
+  margin-top: 0.35rem;
 }
 
 .urlaub-month-label {
