@@ -3121,6 +3121,24 @@ function getProjectGanttConflictNameLines(p) {
   return [...unique].sort((a, b) => a.localeCompare(b, "de"));
 }
 
+/**
+ * frappe-gantt 0.6: `bind_grid_click` schließt bei Klick auf `.grid-row`/`.grid-header` das Popup.
+ * Balken liegen in einer Grid-Zeile – der Klick bubbelt zum SVG und schließt das Popup sofort nach dem Öffnen.
+ * @param {HTMLElement} wrap `#gantt-container`
+ */
+function bindGanttBarClickStopPropagationForPopup(wrap) {
+  const svg = wrap.querySelector("svg.gantt");
+  if (!svg) return;
+  /** @param {Event} ev */
+  const stop = (ev) => {
+    ev.stopPropagation();
+  };
+  for (const el of svg.querySelectorAll("g.bar-wrapper")) {
+    el.addEventListener("click", stop, false);
+    el.addEventListener("dblclick", stop, false);
+  }
+}
+
 function renderGanttCore() {
   if (!state) return;
   destroyGantt();
@@ -3183,6 +3201,7 @@ function renderGanttCore() {
       },
     });
     refreshProjectGanttBarLabelRepeats();
+    bindGanttBarClickStopPropagationForPopup(wrap);
     requestAnimationFrame(() => {
       scheduleLayoutProjectGanttBarLabelRepeats();
       requestAnimationFrame(() => scheduleLayoutProjectGanttBarLabelRepeats());
