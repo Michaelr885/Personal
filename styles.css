@@ -118,7 +118,7 @@ code {
 .sidebar__file-meta {
   margin: 0;
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: #cbd5e1;
   line-height: 1.45;
 }
 
@@ -283,16 +283,6 @@ code {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-}
-
-.btn--success {
-  background: var(--success);
-  color: #fff;
-  border-color: #15803d;
-}
-
-.btn--success:hover {
-  filter: brightness(1.03);
 }
 
 .app-shell.is-planning .main {
@@ -1388,6 +1378,16 @@ textarea {
   border-color: #b91c1c;
 }
 
+.btn--success {
+  background: var(--success);
+  color: #fff;
+  border-color: #15803d;
+}
+
+.btn--success:hover {
+  filter: brightness(1.03);
+}
+
 .btn--ghost {
   background: transparent;
   border-color: transparent;
@@ -1928,8 +1928,25 @@ textarea {
   align-items: center;
 }
 
-.btn--sidebar-secondary:hover {
-  background: rgba(51, 65, 85, 0.9);
+.sidebar .btn.btn--sidebar-secondary {
+  background: rgba(30, 41, 59, 0.92);
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.sidebar .btn.btn--sidebar-secondary:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.95);
+  color: #fff;
+}
+
+.sidebar .btn.btn--sidebar-secondary:disabled,
+.sidebar .btn.btn--sidebar-secondary[disabled] {
+  opacity: 0.88;
+  cursor: not-allowed;
+  color: #f1f5f9;
+  background: rgba(51, 65, 85, 0.55);
+  border-color: rgba(148, 163, 184, 0.35);
+  -webkit-text-fill-color: #f1f5f9;
 }
 
 /* ——— Undo/Redo Toasts ——— */
