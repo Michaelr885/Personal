@@ -224,6 +224,104 @@ code {
   display: none !important;
 }
 
+.app-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 100%;
+}
+
+/* ——— Planungsmodus (Sandbox) ——— */
+.sidebar__planning {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.planning-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin: -1.75rem -2rem 1.25rem;
+  padding: 0.65rem 2rem;
+  border-bottom: 1px solid rgba(180, 83, 9, 0.35);
+  background: linear-gradient(105deg, #fff7ed 0%, #ffedd5 42%, #fed7aa 100%);
+  background-size: 200% 100%;
+  color: #431407;
+  box-shadow: 0 2px 0 rgba(251, 146, 60, 0.25);
+}
+
+.planning-banner[hidden] {
+  display: none !important;
+}
+
+.planning-banner__text {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  flex: 1 1 12rem;
+}
+
+.planning-banner__text .fa-triangle-exclamation {
+  color: #c2410c;
+  flex-shrink: 0;
+}
+
+.planning-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn--success {
+  background: var(--success);
+  color: #fff;
+  border-color: #15803d;
+}
+
+.btn--success:hover {
+  filter: brightness(1.03);
+}
+
+.app-shell.is-planning .main {
+  background-color: color-mix(in srgb, var(--bg) 94%, rgba(251, 191, 36, 0.22));
+  background-image:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+:root[data-theme="dark"] .planning-banner {
+  border-bottom-color: rgba(251, 191, 36, 0.35);
+  background: linear-gradient(105deg, #422006 0%, #713f12 50%, #78350f 100%);
+  color: #ffedd5;
+  box-shadow: 0 2px 0 rgba(251, 191, 36, 0.2);
+}
+
+:root[data-theme="dark"] .planning-banner__text .fa-triangle-exclamation {
+  color: #fbbf24;
+}
+
+:root[data-theme="dark"] .app-shell.is-planning .main {
+  background-color: color-mix(in srgb, var(--bg) 92%, rgba(251, 191, 36, 0.12));
+  background-image:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
 .main__header {
   margin-bottom: 1.5rem;
 }
@@ -2002,7 +2100,7 @@ textarea {
   padding: 0.15rem;
 }
 
-:root[data-theme="dark"] .btn:not(.btn--primary):not(.btn--danger):not(.btn--sidebar-cta) {
+:root[data-theme="dark"] .btn:not(.btn--primary):not(.btn--danger):not(.btn--success):not(.btn--sidebar-cta) {
   background: #334155;
   color: var(--text);
   border-color: var(--border);
@@ -2023,6 +2121,12 @@ textarea {
   background: transparent;
   border-color: transparent;
   color: var(--primary);
+}
+
+:root[data-theme="dark"] .btn--success {
+  background: #22c55e;
+  color: #fff;
+  border-color: #16a34a;
 }
 
 :root[data-theme="dark"] .btn--primary {

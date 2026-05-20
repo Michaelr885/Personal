@@ -145,6 +145,11 @@ let undoStack = [];
 let redoStack = [];
 let historySuspended = false;
 
+/** Sandkasten für Meetings: In-Memory-Änderungen ohne sofortiges Schreiben in daten.json. */
+let isPlanningMode = false;
+/** Snapshot von `cloneStateJson()` beim Start des Planungsmodus. */
+let prePlanningStateJson = "";
+
 function clearUndoHistory() {
   undoStack.length = 0;
   redoStack.length = 0;
@@ -323,6 +328,12 @@ async function persist() {
   const meta = /** @type {HTMLParagraphElement} */ (document.querySelector("#file-meta"));
   err.hidden = true;
   err.textContent = "";
+  if (isPlanningMode) {
+    if (meta) {
+      meta.textContent = `Aktiv: ${getLinkedFileName()} · Planungsmodus – noch nicht auf die Festplatte geschrieben`;
+    }
+    return;
+  }
   try {
     await saveDataToFile(state);
     meta.textContent = `Aktiv: ${getLinkedFileName()} · zuletzt gespeichert ${new Date().toLocaleTimeString("de-DE")}`;
@@ -333,6 +344,79 @@ async function persist() {
         ? /** @type {{message:string}} */ (e).message
         : String(e);
   }
+}
+
+function syncPlanningModeChrome() {
+  const banner = /** @type {HTMLElement | null} */ ($("#planning-banner"));
+  const shell = /** @type {HTMLElement | null} */ ($(".app-shell"));
+  const btn = /** @type {HTMLButtonElement | null} */ ($("#btn-toggle-planning"));
+  if (banner) banner.hidden = !isPlanningMode;
+  shell?.classList.toggle("is-planning", isPlanningMode);
+  if (btn) {
+    btn.disabled = !state || isPlanningMode;
+    btn.innerHTML = isPlanningMode
+      ? '<i class="fa-solid fa-flask" aria-hidden="true"></i> Planungsmodus aktiv'
+      : '<i class="fa-solid fa-flask" aria-hidden="true"></i> Planungsmodus starten';
+  }
+}
+
+function startPlanningMode() {
+  if (!state || isPlanningMode) return;
+  const snap = cloneStateJson();
+  if (!snap) return;
+  prePlanningStateJson = snap;
+  isPlanningMode = true;
+  syncPlanningModeChrome();
+}
+
+async function commitPlanningMode() {
+  if (!isPlanningMode || !state) return;
+  isPlanningMode = false;
+  prePlanningStateJson = "";
+  syncPlanningModeChrome();
+  clearUndoHistory();
+  await persist();
+}
+
+async function cancelPlanningMode() {
+  if (!isPlanningMode) return;
+  const backup = prePlanningStateJson;
+  isPlanningMode = false;
+  prePlanningStateJson = "";
+  syncPlanningModeChrome();
+  if (!backup) {
+    refreshAllDataViews();
+    return;
+  }
+  historySuspended = true;
+  try {
+    state = /** @type {typeof state} */ (JSON.parse(backup));
+    normalizeAllEmployeesShape();
+  } catch (err) {
+    console.error(err);
+    await openModal(
+      "Planungsmodus",
+      "<div>Der gespeicherte Zwischenstand konnte nicht wiederhergestellt werden.</div>",
+      { variant: "info", confirmText: "Verstanden" }
+    );
+  } finally {
+    historySuspended = false;
+  }
+  clearUndoHistory();
+  refreshAllDataViews();
+}
+
+function setupPlanningModeControls() {
+  const ws = /** @type {HTMLElement | null} */ ($("#app-workspace"));
+  if (!ws || ws.dataset.planningBound === "1") return;
+  ws.dataset.planningBound = "1";
+  $("#btn-toggle-planning")?.addEventListener("click", () => startPlanningMode());
+  $("#btn-planning-commit")?.addEventListener("click", () => {
+    void commitPlanningMode();
+  });
+  $("#btn-planning-cancel")?.addEventListener("click", () => {
+    void cancelPlanningMode();
+  });
 }
 
 function $(sel, root = document) {
@@ -4521,6 +4605,9 @@ function setupFileLinking() {
       state = data;
       normalizeAllEmployeesShape();
       clearUndoHistory();
+      isPlanningMode = false;
+      prePlanningStateJson = "";
+      syncPlanningModeChrome();
       await runAutoStatusSyncAndPersist();
       meta.textContent = `Aktiv: ${getLinkedFileName()} · Daten geladen`;
       $("#gate-screen").hidden = true;
@@ -5208,8 +5295,12 @@ function boot() {
   closeAllModalsAndBackdrops();
   state = null;
   clearUndoHistory();
+  isPlanningMode = false;
+  prePlanningStateJson = "";
+  syncPlanningModeChrome();
   initAppPreferences();
   setupNavigation();
+  setupPlanningModeControls();
   setupDashboardDnD();
   setupDashboardAbsenceModal();
   setupProjectsInteractions();
