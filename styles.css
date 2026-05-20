@@ -648,11 +648,46 @@ code {
   touch-action: none;
 }
 
-/* Beim Zug liegt der Finger auf dem Chip — sonst trifft elementFromPoint nur das Drag-Element */
+/* Während Mitarbeiter-Zug: Cursor + deutliches „Placeholder“-Aussehen der Quelle (HTML5- und Pointer/Touch-Pfad) */
+#view-dashboard.dashboard-view--employee-dragging {
+  cursor: grabbing !important;
+}
+
 .dashboard-emp-chip.dashboard-emp-dragging,
 .card-team li.dashboard-emp-dragging {
   pointer-events: none;
-  opacity: 0.88;
+  opacity: 0.45;
+  outline: 2px dashed var(--primary);
+  outline-offset: 2px;
+  box-shadow: 0 10px 32px rgba(37, 99, 235, 0.28);
+  transform: scale(0.98);
+  z-index: 6;
+  position: relative;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.card-team li.dashboard-emp-dragging {
+  background: var(--primary-soft) !important;
+  border-color: rgba(37, 99, 235, 0.45) !important;
+}
+
+.dashboard-emp-chip.dashboard-emp-dragging {
+  border: 1px dashed rgba(37, 99, 235, 0.65) !important;
+  background: var(--primary-soft) !important;
+}
+
+:root[data-theme="dark"] .card-team li.dashboard-emp-dragging {
+  background: rgba(37, 99, 235, 0.22) !important;
+  border-color: rgba(96, 165, 250, 0.55) !important;
+}
+
+:root[data-theme="dark"] .dashboard-emp-chip.dashboard-emp-dragging {
+  background: rgba(37, 99, 235, 0.22) !important;
+  border-color: rgba(96, 165, 250, 0.55) !important;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
 }
 
 .card-team li[data-dashboard-employee] {
