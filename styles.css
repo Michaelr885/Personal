@@ -745,6 +745,52 @@ code {
   min-height: 220px;
 }
 
+/* Projekte-Gantt: Popup aus custom_popup_html (frappe-gantt) */
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-custom {
+  text-align: left;
+  padding: 0.15rem 0.25rem 0.35rem;
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-custom h5 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-custom .gantt-popup-dates,
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-custom .hint {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts {
+  border-top: 1px solid rgba(100, 116, 139, 0.45);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts__title .fa-triangle-exclamation {
+  flex-shrink: 0;
+}
+
+#gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts__list {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #b91c1c;
+}
+
 .split {
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;
@@ -2085,6 +2131,14 @@ textarea {
 
 :root[data-theme="dark"] .gantt-container .popup-wrapper .subtitle {
   color: var(--muted);
+}
+
+:root[data-theme="dark"] #gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts {
+  border-top-color: rgba(148, 163, 184, 0.35);
+}
+
+:root[data-theme="dark"] #gantt-container .gantt-container .popup-wrapper .gantt-popup-conflicts__list {
+  color: #fecaca;
 }
 
 /* Native Select / Datum / Textfelder: eigene Farben, sonst helle Schrift auf weißem Control */

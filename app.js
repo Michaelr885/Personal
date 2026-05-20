@@ -2959,18 +2959,34 @@ function setupProjectDropDelegation() {
   });
 }
 
-/** Krank- oder Urlaubs-Kalender: Abwesenheit an dayISO (Status-Feld egal). */
-function isEmployeeCalendarAbsentOnDay(emp, dayISO) {
-  if (isDayInAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) return true;
-  if (isDayInAnyUrlaubRange(dayISO, emp)) return true;
-  return false;
+/**
+ * Kalenderbasierte Abwesenheitsart an einem Tag (Krank hat Vorrang wie bei der Konfliktprüfung).
+ * @param {Employee} emp
+ * @param {string} dayISO
+ * @returns {"Krank"|"Urlaub"|null}
+ */
+function absenceKindOnCalendarDay(emp, dayISO) {
+  if (isDayInAbsenceRange(dayISO, emp.Krank_ab, emp.Krank_bis)) return "Krank";
+  if (isDayInAnyUrlaubRange(dayISO, emp)) return "Urlaub";
+  return null;
 }
 
-/** Mindestens eine Projektzuweisung überlappt den Projektzeitraum und liegt auf einem Abwesenheitstag der Person. */
-function projectHasAssignmentAbsenceConflict(p) {
-  if (!state) return false;
+/** @param {Employee} emp */
+function employeeDisplayName(emp) {
+  const n = `${String(emp.Vorname ?? "").trim()} ${String(emp.Nachname ?? "").trim()}`.trim();
+  return n || `ID ${emp.ID}`;
+}
+
+/**
+ * Eindeutige Zeilen für Gantt-Tooltip: zugewiesene Personen mit Krank/Urlaub im Überlappungszeitraum.
+ * @param {Project} p
+ * @returns {string[]}
+ */
+function getProjectGanttConflictNameLines(p) {
+  if (!state) return [];
   const pStart = p.Startdatum;
   const pEnd = p.Enddatum;
+  const unique = /** @type {Set<string>} */ (new Set());
   for (const a of state.assignments) {
     if (Number(a.Project_ID) !== Number(p.ID)) continue;
     if (!rangesOverlap(a.Startdatum, a.Enddatum, pStart, pEnd)) continue;
@@ -2982,13 +2998,16 @@ function projectHasAssignmentAbsenceConflict(p) {
     let cur = s;
     let guard = 0;
     while (cur <= e && guard++ < 4000) {
-      if (isEmployeeCalendarAbsentOnDay(emp, cur)) return true;
+      const kind = absenceKindOnCalendarDay(emp, cur);
+      if (kind) {
+        unique.add(`${employeeDisplayName(emp)} (${kind})`);
+      }
       const nxt = addCalendarDaysToISO(cur, 1);
       if (!nxt || nxt <= cur) break;
       cur = nxt;
     }
   }
-  return false;
+  return [...unique].sort((a, b) => a.localeCompare(b, "de"));
 }
 
 function renderGanttCore() {
@@ -3005,8 +3024,12 @@ function renderGanttCore() {
 
   const tasks = state.projects.map((p) => {
     const mod = ((Number(p.ID) - 1) % 5) + 1;
-    const conflict = projectHasAssignmentAbsenceConflict(p);
+    const conflictLines = getProjectGanttConflictNameLines(p);
+    const conflict = conflictLines.length > 0;
     const cls = conflict ? `gantt-p${mod} gantt-conflict` : `gantt-p${mod}`;
+    const conflict_html = conflict
+      ? conflictLines.map((line) => escapeHtml(line)).join("<br>")
+      : "";
     return {
       id: String(p.ID),
       name: p.Name,
@@ -3014,6 +3037,7 @@ function renderGanttCore() {
       end: p.Enddatum,
       progress: 0,
       custom_class: cls,
+      conflict_html,
     };
   });
 
@@ -3029,6 +3053,16 @@ function renderGanttCore() {
       // frappe-gantt 0.6.1: keine Locale "de" (month_names) → sonst TypeError in date_utils
       language: "en",
       date_format: "YYYY-MM-DD",
+      custom_popup_html(task) {
+        let html = `<div class="gantt-popup-custom"><h5>${escapeHtml(task.name)}</h5><p class="hint gantt-popup-dates">${escapeHtml(
+          String(task.start)
+        )} bis ${escapeHtml(String(task.end))}</p>`;
+        if (task.conflict_html) {
+          html += `<div class="gantt-popup-conflicts"><div class="gantt-popup-conflicts__title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Konflikte:</div><div class="gantt-popup-conflicts__list">${task.conflict_html}</div></div>`;
+        }
+        html += `</div>`;
+        return html;
+      },
       on_date_change(task, start, end) {
         const startISO = dateFromGanttToProjectISO(start);
         const endISO = dateFromGanttToProjectISO(end ?? start);
