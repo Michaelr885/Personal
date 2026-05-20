@@ -547,7 +547,7 @@ code {
   background: linear-gradient(180deg, var(--primary-soft) 0%, #fff 55%);
 }
 
-/* Teamkarte: kein natives Drag auf der ganzen Fläche (siehe .card-team__drag-handle) */
+/* Teamkarte: kein natives Drag auf der ganzen Fläche — Griff = Reihenfolge, Name = PL (siehe .card-team__head) */
 #view-dashboard .card-team.team-drop-zone,
 #view-dashboard .panel--unassigned.team-drop-zone {
   -webkit-tap-highlight-color: transparent;
@@ -833,69 +833,66 @@ code {
   border-left: 6px solid var(--team-color, var(--team-fallback));
 }
 
-/* Nur die Kopfzeile ist nativ draggable (Reihenfolge); die Karte selbst nicht — sonst „frisst“ HTML5-Drag das Ziehen von Personen. */
-.card-team__drag-handle {
-  margin: -0.15rem;
-  padding: 0.15rem;
-  border-radius: 10px;
-}
-
-.card-team__drag-handle[draggable="true"] {
-  cursor: grab;
-}
-
-.card-team__drag-handle[draggable="true"]:active {
-  cursor: grabbing;
-}
-
-.card-team__title {
+/* Kopfzeile: Griff (Reihenfolge) + Name (PL auf Projekt ziehen) */
+.card-team__head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: -0.1rem 0 0.45rem;
+  padding: 0.1rem 0 0;
 }
 
-.card-team__title strong {
-  font-size: 1.05rem;
-}
-
-/* Projektleiter (PL): von der Teamkarte auf „Projekte & Verantwortliche“ ziehen */
-.card-team__pl-assign-drag {
-  display: flex;
-  flex-wrap: wrap;
+.card-team__reorder-grip {
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin: 0.35rem 0 0.15rem;
-  padding: 0.32rem 0.45rem;
+  justify-content: center;
+  margin-top: 0.12rem;
+  padding: 0.2rem 0.28rem;
   border-radius: 8px;
-  border: 1px dashed var(--border);
-  background: var(--surface);
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text);
-  cursor: grab;
+  color: var(--muted);
+  line-height: 1;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.card-team__pl-assign-drag[draggable="true"]:active {
+.card-team__reorder-grip[draggable="true"] {
+  cursor: grab;
+}
+
+.card-team__reorder-grip[draggable="true"]:active {
   cursor: grabbing;
 }
 
-.card-team__pl-assign-drag .fa-user-tie {
-  color: var(--primary);
-  opacity: 0.9;
-}
-
-.card-team__pl-assign-hint {
+.card-team__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin: 0;
-  font-weight: 500;
-  font-size: 0.72rem;
 }
 
-.card-team__pl-assign-drag--dragging {
+.card-team__title--pl-drag {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 8px;
+  padding: 0.08rem 0.2rem;
+  margin: -0.08rem -0.2rem;
+}
+
+.card-team__title--pl-drag[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.card-team__title--pl-dragging {
   opacity: 0.65;
+}
+
+.card-team__title strong {
+  font-size: 1.05rem;
 }
 
 .badge {
