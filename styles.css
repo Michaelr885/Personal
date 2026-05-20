@@ -1961,9 +1961,22 @@ textarea {
   background: #334155;
   padding: 0.15rem;
 }
+
+:root[data-theme="dark"] .btn:not(.btn--primary):not(.btn--danger):not(.btn--sidebar-cta) {
   background: #334155;
   color: var(--text);
   border-color: var(--border);
+}
+
+:root[data-theme="dark"] .btn-group--toggle .btn {
+  background: #334155;
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .btn-group--toggle .btn.is-active {
+  background: rgba(96, 165, 250, 0.28);
+  color: #e0f2fe;
+  font-weight: 600;
 }
 
 :root[data-theme="dark"] .btn--ghost {
@@ -1975,11 +1988,6 @@ textarea {
 :root[data-theme="dark"] .btn--primary {
   color: #fff;
   border-color: #2563eb;
-}
-
-:root[data-theme="dark"] .btn-group--toggle .btn.is-active {
-  color: #e0f2fe;
-  font-weight: 600;
 }
 
 :root[data-theme="dark"] .badge {
