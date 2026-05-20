@@ -877,6 +877,26 @@ code {
   color: var(--muted);
 }
 
+.badge--leiter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 6px;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+  background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+  color: #eff6ff;
+  border: 1px solid rgba(15, 23, 42, 0.88);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.badge--leiter .fa-user-tie {
+  opacity: 0.92;
+}
+
 .badge--avail {
   background: var(--status-verfügbar-soft);
   color: var(--status-verfügbar);
@@ -1159,6 +1179,15 @@ code {
   color: var(--muted);
 }
 
+.project-drop-card__leiter {
+  margin: 0 0 0.35rem;
+  min-height: 1.2rem;
+}
+
+.project-drop-card__leiter--empty .hint {
+  font-size: 0.76rem;
+}
+
 .project-drop-card--active {
   border-color: var(--primary);
   background: var(--primary-soft);
@@ -1167,6 +1196,10 @@ code {
 
 .modal__card--compact {
   max-width: 400px;
+}
+
+#project-modal .modal__card--compact {
+  max-width: min(520px, 96vw);
 }
 
 .dnd-modal__project {
@@ -2215,6 +2248,17 @@ textarea {
   color: var(--muted);
 }
 
+:root[data-theme="dark"] .badge--leiter {
+  background: linear-gradient(180deg, #2563eb 0%, #1e3a8a 100%);
+  color: #eff6ff;
+  border-color: rgba(96, 165, 250, 0.55);
+}
+
+:root[data-theme="dark"] .dashboard-project-chip {
+  background: #1e293b;
+  border-color: var(--border);
+}
+
 :root[data-theme="dark"] .project-drop-card {
   background: #1e293b;
   border-color: var(--border);
@@ -2352,6 +2396,58 @@ textarea {
     rgba(15, 23, 42, 0.5) 3px,
     rgba(15, 23, 42, 0.5) 4px
   );
+}
+
+.dashboard-projects-panel .dashboard-project-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.dashboard-project-chip {
+  flex: 1 1 220px;
+  max-width: 360px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-project-chip__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  margin-bottom: 0.3rem;
+}
+
+.dashboard-project-chip__name {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.dashboard-project-chip__dates {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.dashboard-project-chip__no-pl {
+  font-size: 0.8rem;
+}
+
+.projects-table__projcell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.projects-table__name {
+  font-weight: 650;
+  color: var(--text);
 }
 
 .dashboard-next-feier-badge {

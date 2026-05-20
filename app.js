@@ -8,7 +8,7 @@ import {
 /** @typedef {{ von: string, bis: string|null, Halber_Tag?: boolean }} Urlaubsperiode */
 /** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_halber_Tag?: boolean, Urlaub_perioden: Urlaubsperiode[] }} Employee */
 /** @typedef {{ ID:number, Name:string, Team_Farbe:string, Abteilung:string, Reihenfolge:number }} TeamLeader */
-/** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number> }} Project */
+/** @typedef {{ ID:number, Name:string, Startdatum:string, Enddatum:string, Benötigte_Qualifikationen:Record<string, number>, leiterId:string }} Project */
 /** @typedef {{ ID:number, Project_ID:number, Employee_ID:number, Startdatum:string, Enddatum:string }} Assignment */
 
 /** Vorgabe-Liste, wenn in der Datei noch keine `qualifications` gepflegt sind. */
@@ -133,6 +133,25 @@ function normalizeAllEmployeesShape() {
   }
   ensureStateQualifications();
   ensureDashboardAbteilungReihenfolge();
+  normalizeAllProjectsShape();
+}
+
+/** Stellt `leiterId` auf Projekten bereit und entfernt ungültige Verweise. */
+function normalizeAllProjectsShape() {
+  if (!state) return;
+  for (const p of state.projects) {
+    const raw = p.leiterId;
+    if (raw == null || String(raw).trim() === "") {
+      p.leiterId = "";
+      continue;
+    }
+    const id = Number(String(raw).trim());
+    if (!Number.isFinite(id) || !state.employees.some((e) => Number(e.ID) === id)) {
+      p.leiterId = "";
+    } else {
+      p.leiterId = String(id);
+    }
+  }
 }
 
 /** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[], qualifications: string[], dashboard_abteilung_reihenfolge: string[] } | null} */
@@ -689,6 +708,65 @@ function getEmployee(id) {
 function getProject(id) {
   if (!state) return undefined;
   return state.projects.find((p) => Number(p.ID) === Number(id));
+}
+
+/** @param {Project} p */
+function getProjectLeiterEmployee(p) {
+  if (!state) return undefined;
+  const raw = String(p.leiterId ?? "").trim();
+  if (!raw) return undefined;
+  const id = Number(raw);
+  if (!Number.isFinite(id)) return undefined;
+  return getEmployee(id);
+}
+
+/** @param {Employee} emp */
+function employeeAbbreviatedPLName(emp) {
+  const vn = String(emp.Vorname ?? "").trim();
+  const nn = String(emp.Nachname ?? "").trim();
+  if (!nn) return vn || `ID ${emp.ID}`;
+  const ini = vn ? `${vn.charAt(0).toUpperCase()}. ` : "";
+  return `${ini}${nn}`;
+}
+
+/** Kompaktes PL-Badge (HTML, escaped); leer wenn kein gültiger Leiter. @param {Project} p */
+function projectLeiterBadgeHtml(p) {
+  const emp = getProjectLeiterEmployee(p);
+  if (!emp) return "";
+  const full = `${String(emp.Vorname ?? "").trim()} ${String(emp.Nachname ?? "").trim()}`.trim();
+  const label = full || `ID ${emp.ID}`;
+  return `<span class="badge badge--leiter" title="Verantwortliche Person / Projektleitung"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> ${escapeHtml(
+    label
+  )}</span>`;
+}
+
+/** Anzeigetext für Gantt-Balken inkl. optionaler PL-Kürzel. @param {Project} p */
+function ganttTaskTitleForDisplay(p) {
+  const emp = getProjectLeiterEmployee(p);
+  if (!emp) return p.Name;
+  return `${p.Name} (PL: ${employeeAbbreviatedPLName(emp)})`;
+}
+
+function fillProjectLeiterSelect(/** @type {string | null | undefined} */ selectedId) {
+  if (!state) return;
+  const sel = /** @type {HTMLSelectElement | null} */ ($("#project-leiter-select"));
+  if (!sel) return;
+  const want = String(selectedId ?? "").trim();
+  const sorted = [...state.employees].sort((a, b) =>
+    `${a.Nachname} ${a.Vorname}`.localeCompare(`${b.Nachname} ${b.Vorname}`, "de")
+  );
+  const parts = ['<option value="">-- Kein Leiter zugewiesen --</option>'];
+  for (const e of sorted) {
+    const idStr = String(e.ID);
+    const selAttr = idStr === want ? " selected" : "";
+    const label = `${String(e.Vorname ?? "").trim()} ${String(e.Nachname ?? "").trim()}`.trim() || `ID ${e.ID}`;
+    parts.push(
+      `<option value="${escapeHtml(idStr)}"${selAttr}>${escapeHtml(label)} · ${escapeHtml(e.Qualifikation)} (${escapeHtml(
+        e.Personalnummer
+      )})</option>`
+    );
+  }
+  sel.innerHTML = parts.join("");
 }
 
 function getTeamLeader(id) {
@@ -2559,6 +2637,31 @@ function renderDashboard() {
           nextFeier.daysUntil === 0 ? "heute" : nextFeier.daysUntil === 1 ? "morgen" : `in ${nextFeier.daysUntil} Tagen`
         })</span>`;
 
+  const dashboardProjectsPanelHtml =
+    state.projects.length === 0
+      ? ""
+      : `<div class="panel dashboard-projects-panel">
+      <div class="panel__head">
+        <h2><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Projekte &amp; Verantwortliche</h2>
+      </div>
+      <p class="hint">Zuständige Person (PL) je Projekt – pflegen Sie die Zuweisung unter <strong>Zeitleiste</strong> → Projekt bearbeiten.</p>
+      <div class="dashboard-project-chips" role="list">${state.projects
+        .slice()
+        .sort((a, b) => Number(a.ID) - Number(b.ID))
+        .map((p) => {
+          const badge = projectLeiterBadgeHtml(p);
+          const plSlot = badge || '<span class="hint dashboard-project-chip__no-pl">Kein PL</span>';
+          return `<div class="dashboard-project-chip" role="listitem">
+            <div class="dashboard-project-chip__row">
+              <span class="dashboard-project-chip__name">${escapeHtml(p.Name)}</span>
+              ${plSlot}
+            </div>
+            <span class="dashboard-project-chip__dates">${escapeHtml(p.Startdatum)} – ${escapeHtml(p.Enddatum)}</span>
+          </div>`;
+        })
+        .join("")}</div>
+    </div>`;
+
   root.innerHTML = `
     <div class="panel panel--unassigned team-drop-zone" data-drop-unassigned="1">
       <div class="panel__head">
@@ -2581,6 +2684,7 @@ function renderDashboard() {
       </p>
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
+    ${dashboardProjectsPanelHtml}
     <div class="panel dashboard-absence-drop panel--drop-hint team-drop-zone" data-drop-absence="1" id="dashboard-absence-drop">
       <div class="panel__head panel__head--wrap">
         <h2><i class="fa-solid fa-user-injured"></i> Abwesenheit melden</h2>
@@ -2846,8 +2950,13 @@ function renderProjectDropZones() {
   host.innerHTML = state.projects
     .map((p) => {
       const name = escapeHtml(p.Name);
+      const badge = projectLeiterBadgeHtml(p);
+      const leiterRow = badge
+        ? `<div class="project-drop-card__leiter">${badge}</div>`
+        : `<div class="project-drop-card__leiter project-drop-card__leiter--empty"><span class="hint">Kein PL</span></div>`;
       return `<div class="project-drop-card" data-drop-project="${p.ID}" tabindex="0" role="region" aria-label="Ablage ${name}">
         <p class="project-drop-card__name">${name}</p>
+        ${leiterRow}
         <p class="project-drop-card__meta">${p.Startdatum} – ${p.Enddatum}</p>
       </div>`;
     })
@@ -2860,7 +2969,9 @@ function openDndAssignModal(employeeId, projectId) {
   if (!emp || !proj || !state) return;
   /** @type {HTMLInputElement} */ ($("#dnd-emp-id")).value = String(employeeId);
   /** @type {HTMLInputElement} */ ($("#dnd-proj-id")).value = String(projectId);
-  $("#dnd-modal-project-label").textContent = `Projekt: ${proj.Name}`;
+  const pl = getProjectLeiterEmployee(proj);
+  const plPart = pl ? ` · PL: ${employeeAbbreviatedPLName(pl)}` : "";
+  $("#dnd-modal-project-label").textContent = `Projekt: ${proj.Name}${plPart}`;
   /** @type {HTMLInputElement} */ ($("#dnd-start")).value = proj.Startdatum;
   /** @type {HTMLInputElement} */ ($("#dnd-end")).value = proj.Enddatum;
   $("#dnd-modal-backdrop").hidden = false;
@@ -3032,7 +3143,7 @@ function renderGanttCore() {
       : "";
     return {
       id: String(p.ID),
-      name: p.Name,
+      name: ganttTaskTitleForDisplay(p),
       start: p.Startdatum,
       end: p.Enddatum,
       progress: 0,
@@ -3140,7 +3251,9 @@ function renderProjectsTable() {
     .map(
       (p) => `<tr data-select-project="${p.ID}" class="projects-table__row-selectable" title="Projekt auswählen">
         <td>${p.ID}</td>
-        <td>${escapeHtml(p.Name)}</td>
+        <td><div class="projects-table__projcell"><span class="projects-table__name">${escapeHtml(p.Name)}</span>${projectLeiterBadgeHtml(
+          p
+        )}</div></td>
         <td>${escapeHtml(p.Startdatum)}</td>
         <td>${escapeHtml(p.Enddatum)}</td>
         <td class="actions-cell">
@@ -3171,6 +3284,7 @@ function openProjectModal(proj) {
     : addCalendarDaysToISO(todayISO(), 30) || todayISO();
   renderProjectQualificationsEditor(proj ? { ...(proj.Benötigte_Qualifikationen ?? {}) } : {});
   $("#project-modal-title").textContent = proj ? "Projekt bearbeiten" : "Neues Projekt";
+  fillProjectLeiterSelect(proj ? proj.leiterId : "");
   /** @type {HTMLInputElement} */ ($("#project-form-name")).focus();
 }
 
@@ -3377,10 +3491,15 @@ function renderProjectDetail() {
   const reqs = Object.entries(proj.Benötigte_Qualifikationen || {})
     .map(([k, v]) => `${v}× ${k}`)
     .join(", ");
+  const plBadge = projectLeiterBadgeHtml(proj);
+  const plCell = plBadge
+    ? `<div><strong>PL / Teamleiter</strong><br>${plBadge}</div>`
+    : `<div><strong>PL / Teamleiter</strong><br><span class="hint">—</span></div>`;
   panel.innerHTML = `
     <div class="meta">
       <div><strong>Start</strong><br>${proj.Startdatum}</div>
       <div><strong>Ende</strong><br>${proj.Enddatum}</div>
+      ${plCell}
       <div><strong>Bedarf</strong><br>${reqs || "—"}</div>
     </div>
     ${renderProjectAssignments(proj.ID)}
@@ -3704,6 +3823,10 @@ function setupProjectsInteractions() {
       );
       return;
     }
+    const leiterSel = /** @type {HTMLSelectElement} */ ($("#project-leiter-select"));
+    const leiterRaw = leiterSel.value.trim();
+    const leiterId =
+      leiterRaw === "" || !state.employees.some((e) => String(e.ID) === leiterRaw) ? "" : leiterRaw;
     if (idRaw !== "") {
       const idxEarly = state.projects.findIndex((p) => String(p.ID) === idRaw);
       if (idxEarly < 0) {
@@ -3726,6 +3849,7 @@ function setupProjectsInteractions() {
         Startdatum: start,
         Enddatum: end,
         Benötigte_Qualifikationen,
+        leiterId,
       });
     } else {
       const idx = state.projects.findIndex((p) => String(p.ID) === idRaw);
@@ -3736,12 +3860,14 @@ function setupProjectsInteractions() {
         Startdatum: start,
         Enddatum: end,
         Benötigte_Qualifikationen,
+        leiterId,
       };
     }
     await persist();
     closeProjectModal();
     renderProjectsView();
     renderDashboard();
+    renderGantt();
   });
 
   bindGanttProjectDateDocumentSync();

@@ -201,6 +201,7 @@ export function createMockDataset() {
         Startdatum: addDays(t, -20),
         Enddatum: addDays(t, 40),
         Benötigte_Qualifikationen: { Monteur: 3, Schweißer: 1, Bauleiter: 1 },
+        leiterId: "104",
       },
       {
         ID: 2,
@@ -208,6 +209,7 @@ export function createMockDataset() {
         Startdatum: addDays(t, -5),
         Enddatum: addDays(t, 70),
         Benötigte_Qualifikationen: { Monteur: 4, Elektriker: 2, Bauleiter: 1 },
+        leiterId: "101",
       },
       {
         ID: 3,
@@ -215,6 +217,7 @@ export function createMockDataset() {
         Startdatum: addDays(t, 10),
         Enddatum: addDays(t, 55),
         Benötigte_Qualifikationen: { Monteur: 2, Schweißer: 2 },
+        leiterId: "",
       },
     ],
     qualifications: ["Monteur", "Schweißer", "Bauleiter", "Elektriker", "Lagerist"],
@@ -362,6 +365,13 @@ function normalizeDataset(raw) {
   team_leaders.forEach((row, i) => {
     if (row && typeof row === "object") /** @type {{ Reihenfolge: number }} */ (row).Reihenfolge = i;
   });
+
+  for (const row of projects) {
+    if (!row || typeof row !== "object") continue;
+    const p = /** @type {Record<string, unknown>} */ (row);
+    if (p.leiterId === undefined || p.leiterId === null) p.leiterId = "";
+    else p.leiterId = String(p.leiterId).trim();
+  }
 
   return { team_leaders, employees, projects, assignments, qualifications, dashboard_abteilung_reihenfolge };
 }
