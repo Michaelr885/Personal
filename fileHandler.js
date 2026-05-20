@@ -1,11 +1,20 @@
 /**
  * Lokale Persistenz über die File System Access API (Chrome/Edge, localhost/https).
  * Hält ein FileSystemFileHandle im Speicher und schreibt `daten.json` bei Bedarf vollständig neu.
+ *
+ * Öffentliche API (von `app.js` importiert):
+ * - `linkLocalDataFile()` – Dateiauswahl, leere/kaputte Dateien → Demo-Datensatz + Speichern
+ * - `saveDataToFile(state)` – komplettes JSON zurück auf die Platte (wird von `persist()` gerufen)
+ * - `isFileSystemAccessSupported()`, `hasLinkedDataFile()`, `getLinkedFileName()` – UI-Zustand
+ * - `createMockDataset()` – Startinhalt / Reparatur leerer Dateien (nur in diesem Modul genutzt)
+ *
+ * Intern: `normalizeDataset` prüft/ergänzt Felder; Datums-Helfer `todayISO`/`addDays` für Demo-Daten.
  */
 
 /** @type {FileSystemFileHandle | null} */
 let dataFileHandle = null;
 
+/** Lokales Kalenderdatum als yyyy-mm-dd (ohne UTC-Verschiebung). */
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -14,6 +23,7 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
+/** ISO-Datum + n Kalendertage (Mittag-Anchor, für Demo-Zeiträume in `createMockDataset`). */
 function addDays(isoDate, days) {
   const d = new Date(`${isoDate}T12:00:00`);
   d.setDate(d.getDate() + days);
@@ -23,6 +33,7 @@ function addDays(isoDate, days) {
   return `${y}-${m}-${day}`;
 }
 
+/** Demo-Stammdaten inkl. Zuweisungen, Projekten mit `leiterId` (Teamleiter-ID), Dashboard-Reihenfolge. */
 export function createMockDataset() {
   const t = todayISO();
   return {
@@ -268,6 +279,8 @@ export function createMockDataset() {
 }
 
 /**
+ * Parst geladenes JSON in ein konsistentes Objekt; `null` wenn die Datei faktisch leer ist
+ * (keine Teamleiter, Mitarbeitenden, Projekte, Zuweisungen) → Aufrufer ersetzt durch Demo-Daten.
  * @param {unknown} raw
  * @returns {{ team_leaders:any[], employees:any[], projects:any[], assignments:any[], qualifications:string[], dashboard_abteilung_reihenfolge:string[] } | null}
  */

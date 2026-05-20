@@ -1,9 +1,53 @@
+/**
+ * ============================================================================
+ * Personal- & Projektplanung – zentrale Anwendungslogik (`app.js`)
+ * ============================================================================
+ *
+ * Architektur (Kurzüberblick):
+ * - **Einzelner Zustand** im globalen `state`-Objekt (siehe JSDoc bei `state`): Mitarbeitende,
+ *   Teamleitungen, Projekte, Zuweisungen, Qualifikationen, Dashboard-Reihenfolge der Abteilungen.
+ * - **Lesen/Schreiben** der Datei `daten.json` über `./fileHandler.js` (`persist()`, Verknüpfung in
+ *   `setupFileLinking()`). Im Planungsmodus werden Änderungen nur im Speicher gehalten, bis
+ *   „Übernehmen“ oder „Abbrechen“.
+ * - **Rendering**: Pro Ansicht eine `render*()`-Funktion, die HTML in vorhandene Container schreibt.
+ *   Nach datenverändernden Aktionen typischerweise `persist()` und gezielt `renderDashboard()`,
+ *   `renderProjectsView()`, `renderPersonnelView()`, `renderUrlaubPlan()` bzw. `refreshAllDataViews()`.
+ * - **Navigation**: `switchView(name)` steuert Sichtbarkeit der `<section id="view-*">`-Blöcke in
+ *   `index.html` (`dashboard` | `projects` | `personnel` | `urlaub`).
+ *
+ * Orientierung im File (Suchstrings / grobe Bereiche):
+ * | Bereich                         | Anker / Startfunktionen                          |
+ * |--------------------------------|--------------------------------------------------|
+ * | Typen & Konstanten            | `@typedef`, `DEFAULT_QUALIFICATIONS`           |
+ * | Normalisierung Stammdaten     | `normalizeAllEmployeesShape`, `normalizeAllProjectsShape` |
+ * | Undo / Planungsmodus          | `recordUndoSnapshot`, `persist`, `isPlanningMode` |
+ * | DOM-Helfer                    | `$`, `$all`                                     |
+ * | Datum & ISO                   | `todayISO`, `rangesOverlap`, …                   |
+ * | Urlaubsperioden & Feiertage   | `getUrlaubRanges`, `buildHolidayMapForYear`, …   |
+ * | Teamleiter / Projektleiter    | `getTeamLeader`, `getProjectLeiterTeamLeader`, `leiterId` |
+ * | Dashboard UI & DnD            | `renderDashboard`, `setupDashboardDnD`           |
+ * | Gantt / Zeitleiste            | `renderGantt`, `renderProjectsView`, Balken-Sync |
+ * | Personalverwaltung            | `renderPersonnelView`, `setupPersonnelInteractions` |
+ * | Urlaubsplan                   | `renderUrlaubPlan`, `setupUrlaubView`            |
+ * | Bootstrapping                 | `boot`, `startApp`                               |
+ *
+ * Wichtig für **Projektleiter (PL)**:
+ * - `Project.leiterId` ist immer eine **Teamleiter-ID** (`team_leaders[].ID`), kein Mitarbeiter.
+ * - Dashboard: zusätzlich zu Mitarbeiter-Zug und Karten-Reihenfolge gibt es `application/x-dashboard-tl-to-project`
+ *   (Zeile „PL zuweisen“ → Projektchip); Details in `setupDashboardDnD`.
+ *
+ * @see fileHandler.js – Dateizugriff und Demo-Datensatz
+ * @see index.html    – Markup der Ansichten und Formulare
+ * @see styles.css    – Darstellung
+ */
 import {
   linkLocalDataFile,
   saveDataToFile,
   isFileSystemAccessSupported,
   getLinkedFileName,
 } from "./fileHandler.js";
+
+// --- BEREICH: Typen, Konstanten, Qualifikationsfarben -----------------------------------------
 
 /** @typedef {{ von: string, bis: string|null, Halber_Tag?: boolean }} Urlaubsperiode */
 /** @typedef {{ ID:number, Personalnummer:string, Vorname:string, Nachname:string, Qualifikation:string, Zusatz_Tags:string[], Teamleiter_ID:number|null, Beschäftigung:"AÜG"|"Eigene", Stufe:string, Abteilung:string, Status:string, Rückkehr_erwartet_am:string|null, Abwesenheit_geplant_ab:string|null, Abwesenheit_geplant_bis:string|null, Krank_ab:string|null, Krank_bis:string|null, Urlaub_ab:string|null, Urlaub_bis:string|null, Urlaub_halber_Tag?: boolean, Urlaub_perioden: Urlaubsperiode[] }} Employee */
@@ -121,6 +165,8 @@ function normalizeBeschäftigung(raw) {
   return BESCHÄFTIGUNG_EIGENE;
 }
 
+// --- BEREICH: Normalisierung Mitarbeiter (Felder vor jeder Anzeige/Speicherung) ---------------
+
 function normalizeAllEmployeesShape() {
   if (!state) return;
   for (const emp of state.employees) {
@@ -136,6 +182,8 @@ function normalizeAllEmployeesShape() {
   ensureDashboardAbteilungReihenfolge();
   normalizeAllProjectsShape();
 }
+
+// --- BEREICH: Projekte normalisieren (PL-Verweise) --------------------------------------------
 
 /** Stellt `leiterId` auf Projekten bereit und entfernt ungültige Verweise auf Teamleiter-IDs. */
 function normalizeAllProjectsShape() {
@@ -155,6 +203,8 @@ function normalizeAllProjectsShape() {
   }
 }
 
+// --- BEREICH: globaler Zustand, Undo/Redo, Planungsmodus -------------------------------------
+
 /** @type {{ employees: Employee[], team_leaders: TeamLeader[], projects: Project[], assignments: Assignment[], qualifications: string[], dashboard_abteilung_reihenfolge: string[] } | null} */
 let state = null;
 
@@ -170,16 +220,19 @@ let isPlanningMode = false;
 /** Snapshot von `cloneStateJson()` beim Start des Planungsmodus. */
 let prePlanningStateJson = "";
 
+/** Leert Undo/Redo-Stacks (z. B. nach Dateiload oder Planungsmodus-Commit). */
 function clearUndoHistory() {
   undoStack.length = 0;
   redoStack.length = 0;
 }
 
+/** Tiefenkopie des aktuellen `state` als JSON-String (Undo/Redo). */
 function cloneStateJson() {
   if (!state) return "";
   return JSON.stringify(state);
 }
 
+/** Legt einen Undo-Schritt an (Kopie vor mutierender Operation). */
 function recordUndoSnapshot() {
   if (!state || historySuspended) return;
   undoStack.push(cloneStateJson());
@@ -187,6 +240,7 @@ function recordUndoSnapshot() {
   redoStack.length = 0;
 }
 
+/** Rendert alle „Daten-getriebenen“ Hauptansichten neu (Dashboard immer, Zeitleiste nur wenn aktiv). */
 function refreshAllDataViews() {
   if (!state) return;
   renderDashboard();
@@ -300,6 +354,8 @@ function initAppPreferences() {
   }
 }
 
+// --- BEREICH: Globales Undo (Strg+Z / Strg+Y) – nicht in Texteingaben auslösen ----------------
+
 /** @param {Event} ev */
 function isTypingFieldUndoTarget(ev) {
   const el = ev.target;
@@ -336,6 +392,8 @@ function setupHistoryKeyboard() {
     }
   });
 }
+
+// --- BEREICH: ID-Vergabe, Speichern (`daten.json`), Planungsmodus-Banner ----------------------
 
 function nextId(list, key = "ID") {
   if (!list.length) return 1;
@@ -439,10 +497,14 @@ function setupPlanningModeControls() {
   });
 }
 
+// --- BEREICH: DOM-Helfer `$` / `$all`, Ansichts-Konfiguration (Titel, Container-IDs) ---------
+
+/** @param {string} sel CSS-Selektor @param {ParentNode} [root] @returns {Element | null} */
 function $(sel, root = document) {
   return root.querySelector(sel);
 }
 
+/** @param {string} sel @param {ParentNode} [root] @returns {Element[]} */
 function $all(sel, root = document) {
   return [...root.querySelectorAll(sel)];
 }
@@ -472,6 +534,8 @@ const titles = {
     subtitle: "Monatsraster und Jahresstatistik – Feiertage nach gewähltem Bundesland (Sidebar).",
   },
 };
+
+// --- BEREICH: ISO-Datum, Kalenderarithmetik, Gantt-Datumskonvertierung ------------------------
 
 /** Angezeigter Monat in der Urlaubsplan-Ansicht (Jahr, Monat 0–11). */
 let urlaubCalendarYM = (() => {
@@ -574,6 +638,8 @@ function syncLegacyAbsenceFields(/** @type {Employee} */ emp) {
     emp.Abwesenheit_geplant_bis = null;
   }
 }
+
+// --- BEREICH: Zeiträume (Überlappung Zuweisungen, Urlaub, Abwesenheit) -----------------------
 
 function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   return aStart <= bEnd && bStart <= aEnd;
@@ -700,6 +766,8 @@ function urlaubPlannedEnvelope(emp) {
   }
   return { ab: minAb, bis: maxEnd };
 }
+
+// --- BEREICH: Stammdaten-Zugriff (Mitarbeiter, Projekt, Teamleiter, PL-Anzeige) ---------------
 
 function getEmployee(id) {
   if (!state) return undefined;
@@ -1268,6 +1336,8 @@ const FEIERTAG_LAND_REGELN = {
   TH: { reformation31: true, weltkind20: true },
 };
 
+// --- BEREICH: Feiertage nach Bundesland (localStorage, Karten, Arbeitstage für Urlaub) -------
+
 function getFeierlandCode() {
   try {
     const v = localStorage.getItem(STORAGE_FEIERLAND);
@@ -1485,6 +1555,8 @@ function formatUrlaubStatNumber(/** @type {number} */ n) {
   return s.replace(".", ",");
 }
 
+// --- BEREICH: Urlaubsplan-Monatsraster (Balken-Layout, Filter) --------------------------------
+
 /**
  * Überlappende Urlaubsbalken auf Zeilen verteilen (grid-row).
  * @param {{ gs: number; ge: number; rangeVon: string; rangeBis: string; slot: "haupt" | "zusatz"; halber?: boolean }[]} segs gs erster Tag (1…31), ge exklusiv
@@ -1564,6 +1636,8 @@ function filterEmployeesForUrlaubView() {
     return true;
   });
 }
+
+// --- BEREICH: Urlaubsplan (`#view-urlaub`) – Monatsraster, Statistik, Modals -----------------
 
 function isoFromYearMonthDay(y, m0, day) {
   return `${y}-${pad2(m0 + 1)}-${pad2(day)}`;
@@ -2039,6 +2113,8 @@ function setupUrlaubGanttBlockModal() {
   });
 }
 
+// --- BEREICH: Dashboard (Farben, Teamkarten, Abwesenheits-Hinweise, `renderDashboard`) ------
+
 /** @param {unknown} c */
 function sanitizeTeamColor(c) {
   const s = typeof c === "string" ? c.trim() : "";
@@ -2188,6 +2264,7 @@ function openModal(title, bodyHtml, opts = {}) {
   });
 }
 
+/** Steuert Sichtbarkeit der Haupt-`<section id="view-*">`, Nav-Buttons und ruft passende `render*()` auf. @param {string} name `dashboard` | `projects` | `personnel` | `urlaub` */
 function switchView(name) {
   if (!state) return;
   $all(".nav-btn").forEach((btn) => {
@@ -2465,6 +2542,11 @@ function applyDashboardDragMode(root) {
   });
 }
 
+/**
+ * Baut das gesamte Dashboard in `#dashboard-content` neu auf (HTML-String).
+ * Enthält: ohne TL, Abteilungsblöcke mit Teamkarten, Projekt-PL-Chips, Abwesenheit melden, Listen.
+ * Nach Änderungen an Stammdaten oft zusammen mit `applyDashboardDragMode` am Ende dieses Renders.
+ */
 function renderDashboard() {
   if (!state) return;
   ensureDashboardAbteilungReihenfolge();
@@ -2490,7 +2572,12 @@ function renderDashboard() {
 
   const sortedTls = teamLeadersSortedForDashboard();
 
-  /** @param {TeamLeader} tl */
+  /**
+   * HTML einer Teamkarte: Kopfzeile nur für **Reihenfolge** der Karten (`data-dashboard-team-drag`),
+   * eigene Zeile **PL zuweisen** für Drag auf Projekt (`data-dashboard-drag-tl-to-project`),
+   * Liste mit `data-dashboard-employee` für Mitarbeiter-Zug.
+   * @param {TeamLeader} tl
+   */
   function dashboardTeamCardArticleHtml(tl) {
     const members = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID));
     const assignedCount = members.filter((m) =>
@@ -2641,6 +2728,7 @@ function renderDashboard() {
           nextFeier.daysUntil === 0 ? "heute" : nextFeier.daysUntil === 1 ? "morgen" : `in ${nextFeier.daysUntil} Tagen`
         })</span>`;
 
+  /* Panel „Projekte & Verantwortliche“: jeder Chip `data-drop-project-leiter` = Ziel für PL-Drag aus der Teamkarte. */
   const dashboardProjectsPanelHtml =
     state.projects.length === 0
       ? ""
@@ -2711,6 +2799,8 @@ function renderDashboard() {
   `;
   applyDashboardDragMode(root);
 }
+
+// --- BEREICH: Gantt (Frappe), Balken-Beschriftung, Datumssync ↔ Projekt-Stammdaten ------------
 
 /** Gantt: Projektnamen entlang des Balkens wiederholen (horizontal scrollbar). */
 /** @type {MutationObserver | null} */
@@ -2978,6 +3068,8 @@ function bindGanttProjectDateDocumentSync() {
   document.addEventListener("pointerup", onDocumentReleaseSyncGanttProjectDates);
   document.addEventListener("pointercancel", onDocumentReleaseSyncGanttProjectDates);
 }
+
+// --- BEREICH: Zeitleiste – Ablagekarten, Pool, Zuweisungsdialog, Projekt bearbeiten ------------
 
 function renderProjectDropZones() {
   if (!state) return;
@@ -3650,6 +3742,8 @@ async function submitAssignment(employeeId, projectId, start, end) {
   await pushAssignmentAndRefresh(employeeId, projectId, start, end);
 }
 
+// --- BEREICH: Modale (Allgemein), Ansicht wechseln, globale Event-Bindings --------------------
+
 function closeAllModalsAndBackdrops() {
   const ids = [
     "modal-backdrop",
@@ -3907,6 +4001,8 @@ function setupProjectsInteractions() {
 
   bindGanttProjectDateDocumentSync();
 }
+
+// --- BEREICH: Personalverwaltung (CSS-Zellen, Tabellen, Formulare, Teamleiter-Dialog) ----------
 
 function statusCellClass(status) {
   if (status === "Verfügbar") return "status-cell status-cell--verfügbar";
@@ -4771,6 +4867,8 @@ function setupPersonnelInteractions() {
   }
 }
 
+// --- BEREICH: Navigation, Dateiverknüpfung, Freigabe der Ansichten nach Dateiload ------------
+
 function setNavEnabled(enabled) {
   $all(".nav-btn").forEach((b) => {
     /** @type {HTMLButtonElement} */ (b).disabled = !enabled;
@@ -4821,6 +4919,8 @@ function setupFileLinking() {
     }
   });
 }
+
+// --- BEREICH: Dashboard-Modal „Abwesenheit melden“ (Krank/Urlaub vom Dashboard aus) -----------
 
 function dashAbsRangeHintText(status) {
   if (status === "Krank") {
@@ -4956,6 +5056,9 @@ function setupDashboardAbsenceModal() {
   });
 }
 
+// --- BEREICH: Dashboard Drag & Drop – Zonen, MIME-Typen, Pointer-Fallback ----------------------
+// Siehe `setupDashboardDnD()` für die zentrale Routing-Tabelle der `dataTransfer`-Typen.
+
 let dashboardDnDActiveZone = null;
 
 /** Entfernt Drop-Zonen-Hervorhebung (Maus- und Touch-Zug). */
@@ -5006,7 +5109,7 @@ async function dashboardHandleEmployeeDrop(empId, targetEl) {
   }
 }
 
-/** Hebt die Zone unter (x,y) hervor (Touch-Zug). */
+/** Hebt die Zone unter (x,y) hervor (Touch-/Pointer-Zug für Mitarbeiter). Nur `[data-drop-absence|teamleader|unassigned]` – keine Projektchips. */
 function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
   const zone = /** @type {HTMLElement | null} */ (
@@ -5020,8 +5123,9 @@ function dashboardHighlightDropZoneUnderPoint(clientX, clientY) {
 }
 
 /**
- * Pointer-Zug für Mitarbeitende (Maus, Touch, Stift): zuverlässiger als HTML5-Drag
- * bei gemischten Geräten; setPointerCapture + elementFromPoint beim Loslassen.
+ * Pointer-Zug für **Mitarbeitende** (`[data-dashboard-employee]`) auf dem Dashboard: zuverlässiger als HTML5-Drag
+ * bei Touch/Stift; `setPointerCapture` + `elementFromPoint` beim Loslassen → `dashboardHandleEmployeeDrop`.
+ * Teamleiter-Reihenfolge, Abteilungs-Reihenfolge und PL→Projekt laufen nur über natives HTML5 (`setupDashboardDnD`).
  */
 function setupDashboardPointerDrag(view) {
   if (view.dataset.dashboardPointer === "1") return;
@@ -5268,7 +5372,7 @@ function setupDashboardTouchDrag(view) {
   );
 }
 
-/** @param {DataTransfer | null} dt */
+/** Liefert die von `dataTransfer.types` gemeldeten MIME-Typen (Browser-API leicht unterschiedlich). @param {DataTransfer | null} dt */
 function dashboardDataTransferTypes(dt) {
   if (!dt || !dt.types) return [];
   try {
@@ -5278,6 +5382,23 @@ function dashboardDataTransferTypes(dt) {
   }
 }
 
+/**
+ * Registriert alle Dashboard-Zieh-&-Loslass-Aktionen auf `#view-dashboard` (einmalig via `data-dashboard-dnd`).
+ *
+ * **Reihenfolge in `dragstart` (Priorität oben nach unten):**
+ * 1. Mitarbeiter-Zeile `[data-dashboard-employee]` → `text/plain` + `application/x-employee-id` (Mitarbeiter-ID).
+ * 2. Abteilungs-Griff `[data-dashboard-abteilung-drag]` → `application/x-dashboard-abteilung-reorder` (Abteilungsname).
+ * 3. Teamkarten-Kopf `[data-dashboard-team-drag]` → `application/x-teamleader-reorder` (Teamleiter-ID, Karten tauschen).
+ * 4. PL-Zeile `[data-dashboard-drag-tl-to-project]` → `application/x-dashboard-tl-to-project` + `text/plain` mit Präfix `x-dashboard-tl-project:` (keine reine ID, damit kein Konflikt mit (1)).
+ *
+ * **Drop-Ziele (HTML-Attribute):**
+ * - `[data-drop-dashboard-abteilung]` – Abteilungsblock-Reihenfolge.
+ * - `[data-dashboard-team-card]` – Ziel für Teamleiter-Reihenfolge (nur bei Typ (3)).
+ * - `[data-drop-absence]`, `[data-drop-teamleader]`, `[data-drop-unassigned]` – Mitarbeiter (Typ (1)).
+ * - `[data-drop-project-leiter]` – Projektchip für PL-Zuweisung (Typ (4)).
+ *
+ * **Ergänzend:** `setupDashboardPointerDrag` / `setupDashboardTouchDrag` – eigener Pfad nur für Mitarbeiter (1), nicht für PL oder Karten-Reihenfolge.
+ */
 function setupDashboardDnD() {
   const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
   if (!view || view.dataset.dashboardDnd === "1") return;
@@ -5490,6 +5611,7 @@ function setupDashboardDnD() {
       return;
     }
 
+    /* Projektleiter (PL): Teamleiter-Zeile → Projektchip; `leiterId` = Teamleiter-ID (String). */
     const tlToProject = ev.dataTransfer.getData("application/x-dashboard-tl-to-project");
     if (tlToProject && state) {
       clearDashboardDropZoneHighlight();
@@ -5539,6 +5661,7 @@ function setupDashboardDnD() {
   }
 }
 
+/** Beim Tab-Rückkehr Status aus Abwesenheitsdaten ableiten, falls nötig (`syncEmployeeStatusesFromAbsenceDates`). */
 function setupAutoEmployeeStatusSync() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible" || !state) return;
@@ -5550,6 +5673,10 @@ function setupAutoEmployeeStatusSync() {
   });
 }
 
+/**
+ * Einmaliger App-Start: State leeren, alle Event-Listener registrieren, Navigation bis Dateiload sperren.
+ * Reihenfolge: Modals schließen → Präferenzen → Navigation/Dashboard/… → `setNavEnabled(false)` bis `daten.json` geladen.
+ */
 function boot() {
   closeAllModalsAndBackdrops();
   state = null;
@@ -5576,6 +5703,7 @@ function boot() {
   setNavEnabled(false);
 }
 
+/** Einstieg: `boot()` mit Fehlerdialog bei Ausnahmen (z. B. fehlendes DOM). */
 function startApp() {
   try {
     boot();

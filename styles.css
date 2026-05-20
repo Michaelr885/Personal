@@ -1,3 +1,16 @@
+/**
+ * Personal- & Projektplanung – globale Styles (eine Datei, kein Präprozessor).
+ *
+ * Grobe Gliederung (Suche nach „BEREICH“ oder Überschriften-Kommentaren):
+ * - :root … CSS-Variablen (Farben, Layout, Status, Dashboard-Breiten)
+ * - .app-shell / .sidebar / .main – Grundlayout
+ * - Formulare, Tabellen, Buttons, Modale
+ * - Gantt-Anpassungen, Urlaubsplan-Raster
+ * - Dashboard: Teamkarten, Drop-Zonen, Projekt-Chips, PL-Zuweisen-Zeile
+ * - Dark-Theme Overrides (`:root[data-theme="dark"]`)
+ *
+ * Logik/Markup: `app.js`, `index.html`; Dateizugriff: `fileHandler.js`.
+ */
 :root {
   --bg: #f1f5f9;
   --surface: #ffffff;
@@ -33,6 +46,8 @@
   /* Teamfarben: Karten nutzen zusätzlich inline --team-color aus den Daten */
   --team-fallback: #64748b;
 }
+
+/* --- BEREICH: Reset & Basis-Typografie ------------------------------------------------------ */
 
 *,
 *::before,
