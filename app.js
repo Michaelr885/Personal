@@ -2523,6 +2523,11 @@ function renderDashboard() {
             <strong>${escapeHtml(tl.Name)}</strong>
           </div>
         </div>
+        <div class="card-team__pl-assign-drag" draggable="true" data-dashboard-drag-tl-to-project="${tl.ID}" title="Auf ein Projekt im Bereich „Projekte &amp; Verantwortliche“ unten ziehen – wird als Projektleiter (PL) gespeichert">
+          <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+          <span>PL zuweisen</span>
+          <span class="hint card-team__pl-assign-hint">→ Projekt unten</span>
+        </div>
         <p class="hint card-team__meta">${assignedCount} heute im Projekt</p>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
       </article>`;
@@ -2643,14 +2648,14 @@ function renderDashboard() {
       <div class="panel__head">
         <h2><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Projekte &amp; Verantwortliche</h2>
       </div>
-      <p class="hint">Zuständige Teamleitung (PL) je Projekt – pflegen Sie die Zuweisung unter <strong>Zeitleiste</strong> → Projekt bearbeiten.</p>
+      <p class="hint">Zuständige Teamleitung (PL) je Projekt: Zeile <strong>PL zuweisen</strong> auf einer Teamkarte auf ein Projekt hier ziehen – oder die Zuweisung unter <strong>Zeitleiste</strong> → Projekt bearbeiten pflegen.</p>
       <div class="dashboard-project-chips" role="list">${state.projects
         .slice()
         .sort((a, b) => Number(a.ID) - Number(b.ID))
         .map((p) => {
           const badge = projectLeiterBadgeHtml(p);
           const plSlot = badge || '<span class="hint dashboard-project-chip__no-pl">Kein PL</span>';
-          return `<div class="dashboard-project-chip" role="listitem">
+          return `<div class="dashboard-project-chip" role="listitem" data-drop-project-leiter="${p.ID}">
             <div class="dashboard-project-chip__row">
               <span class="dashboard-project-chip__name">${escapeHtml(p.Name)}</span>
               ${plSlot}
@@ -5329,11 +5334,24 @@ function setupDashboardDnD() {
       ev.dataTransfer.effectAllowed = "move";
       return;
     }
+    const tlPlDrag =
+      ev.target instanceof Element ? ev.target.closest("[data-dashboard-drag-tl-to-project]") : null;
+    if (tlPlDrag instanceof HTMLElement) {
+      const tlId = tlPlDrag.getAttribute("data-dashboard-drag-tl-to-project");
+      if (!tlId || !getTeamLeader(tlId)) return;
+      tlPlDrag.classList.add("card-team__pl-assign-drag--dragging");
+      ev.dataTransfer.setData("application/x-dashboard-tl-to-project", tlId);
+      ev.dataTransfer.setData("text/plain", `x-dashboard-tl-project:${tlId}`);
+      ev.dataTransfer.effectAllowed = "copy";
+    }
   });
 
   view.addEventListener("dragend", () => {
     view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
     view.querySelectorAll(".card-team--reorder-drag").forEach((el) => el.classList.remove("card-team--reorder-drag"));
+    view
+      .querySelectorAll(".card-team__pl-assign-drag--dragging")
+      .forEach((el) => el.classList.remove("card-team__pl-assign-drag--dragging"));
     view
       .querySelectorAll(".dashboard-abteilung--reorder-drag")
       .forEach((el) => el.classList.remove("dashboard-abteilung--reorder-drag"));
@@ -5346,6 +5364,11 @@ function setupDashboardDnD() {
     if (types.includes("application/x-dashboard-abteilung-reorder")) {
       const abtZone = el?.closest("[data-drop-dashboard-abteilung]");
       if (abtZone instanceof HTMLElement) ev.preventDefault();
+      return;
+    }
+    if (types.includes("application/x-dashboard-tl-to-project")) {
+      const chip = el?.closest("[data-drop-project-leiter]");
+      if (chip instanceof HTMLElement) ev.preventDefault();
       return;
     }
     const zone = /** @type {HTMLElement | null} */ (
@@ -5368,6 +5391,19 @@ function setupDashboardDnD() {
         }
         dashboardDnDActiveZone = abtZone;
         abtZone.classList.add("team-drop-zone--active");
+      }
+      return;
+    }
+    if (types.includes("application/x-dashboard-tl-to-project")) {
+      const chip = el?.closest("[data-drop-project-leiter]");
+      if (chip instanceof HTMLElement) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "copy";
+        if (dashboardDnDActiveZone && dashboardDnDActiveZone !== chip) {
+          dashboardDnDActiveZone.classList.remove("team-drop-zone--active");
+        }
+        dashboardDnDActiveZone = chip;
+        chip.classList.add("team-drop-zone--active");
       }
       return;
     }
@@ -5394,6 +5430,16 @@ function setupDashboardDnD() {
       if (!rel || !zone.contains(rel)) {
         zone.classList.remove("team-drop-zone--active");
         if (dashboardDnDActiveZone === zone) dashboardDnDActiveZone = null;
+      }
+      return;
+    }
+    if (types.includes("application/x-dashboard-tl-to-project")) {
+      const chip = el?.closest("[data-drop-project-leiter]");
+      if (!(chip instanceof HTMLElement)) return;
+      const rel = /** @type {Node | null} */ (ev.relatedTarget);
+      if (!rel || !chip.contains(rel)) {
+        chip.classList.remove("team-drop-zone--active");
+        if (dashboardDnDActiveZone === chip) dashboardDnDActiveZone = null;
       }
       return;
     }
@@ -5444,9 +5490,32 @@ function setupDashboardDnD() {
       return;
     }
 
+    const tlToProject = ev.dataTransfer.getData("application/x-dashboard-tl-to-project");
+    if (tlToProject && state) {
+      clearDashboardDropZoneHighlight();
+      const chip = el?.closest("[data-drop-project-leiter]");
+      const projId = chip?.getAttribute("data-drop-project-leiter");
+      const proj = projId ? getProject(projId) : undefined;
+      const tl = getTeamLeader(tlToProject);
+      if (proj && tl && String(proj.leiterId) !== String(tl.ID)) {
+        recordUndoSnapshot();
+        proj.leiterId = String(tl.ID);
+        await persist();
+        renderDashboard();
+        if ($("#view-projects").classList.contains("view--active")) {
+          renderProjectsView();
+        }
+      }
+      return;
+    }
+
     const empId =
       ev.dataTransfer.getData("text/plain") || ev.dataTransfer.getData("application/x-employee-id");
     if (!empId || !state) {
+      clearDashboardDropZoneHighlight();
+      return;
+    }
+    if (empId.startsWith("x-dashboard-tl-project:")) {
       clearDashboardDropZoneHighlight();
       return;
     }
