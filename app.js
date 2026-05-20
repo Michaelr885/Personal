@@ -2445,8 +2445,8 @@ function dashboardTeamCardsUseNativeDrag() {
 
 /**
  * Mitarbeitende: immer ohne natives Drag (Pointer-Zug für Maus, Touch und Stift).
- * Teamkarten-Reihenfolge: natives HTML5-Drag nur auf `[data-dashboard-team-drag]` (Kopfzeile),
- * Abteilungs-Blöcke analog auf `[data-dashboard-abteilung-drag]` — nicht auf der ganzen Karte,
+ * Teamkarten-Reihenfolge: natives HTML5-Drag nur auf dem **Griff** `[data-dashboard-team-drag]` (nicht auf dem Namen),
+ * PL-Zuweisung auf dem **Namen** `[data-dashboard-drag-tl-to-project]` — nicht auf der ganzen Karte,
  * sonst startet der Browser beim Ziehen einer Person den Drag der Teamkarte.
  */
 function applyDashboardDragMode(root) {
@@ -2458,6 +2458,9 @@ function applyDashboardDragMode(root) {
     if (el instanceof HTMLElement) el.draggable = false;
   });
   root.querySelectorAll("[data-dashboard-team-drag]").forEach((el) => {
+    if (el instanceof HTMLElement) el.draggable = nativeTeam;
+  });
+  root.querySelectorAll("[data-dashboard-drag-tl-to-project]").forEach((el) => {
     if (el instanceof HTMLElement) el.draggable = nativeTeam;
   });
   root.querySelectorAll("[data-dashboard-abteilung-drag]").forEach((el) => {
@@ -2518,15 +2521,11 @@ function renderDashboard() {
       })
       .join("");
     return `<article class="panel card-team team-drop-zone" data-dashboard-team-card="${tl.ID}" data-drop-teamleader="${tl.ID}" style="--team-color:${sanitizeTeamColor(tl.Team_Farbe)}">
-        <div class="card-team__drag-handle" data-dashboard-team-drag="1">
-          <div class="card-team__title">
+        <div class="card-team__head">
+          <span class="card-team__reorder-grip" data-dashboard-team-drag="1" title="Teamkarte verschieben (Reihenfolge)" aria-label="Teamkarte verschieben"><i class="fa-solid fa-grip-vertical" aria-hidden="true"></i></span>
+          <div class="card-team__title card-team__title--pl-drag" data-dashboard-drag-tl-to-project="${tl.ID}" title="Namen auf ein Projekt unten („Projekte &amp; Verantwortliche“) ziehen – als Projektleiter (PL) speichern">
             <strong>${escapeHtml(tl.Name)}</strong>
           </div>
-        </div>
-        <div class="card-team__pl-assign-drag" draggable="true" data-dashboard-drag-tl-to-project="${tl.ID}" title="Auf ein Projekt im Bereich „Projekte &amp; Verantwortliche“ unten ziehen – wird als Projektleiter (PL) gespeichert">
-          <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
-          <span>PL zuweisen</span>
-          <span class="hint card-team__pl-assign-hint">→ Projekt unten</span>
         </div>
         <p class="hint card-team__meta">${assignedCount} heute im Projekt</p>
         <ul>${items || '<li class="hint">Keine Personen zugeordnet.</li>'}</ul>
@@ -2648,7 +2647,7 @@ function renderDashboard() {
       <div class="panel__head">
         <h2><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Projekte &amp; Verantwortliche</h2>
       </div>
-      <p class="hint">Zuständige Teamleitung (PL) je Projekt: Zeile <strong>PL zuweisen</strong> auf einer Teamkarte auf ein Projekt hier ziehen – oder die Zuweisung unter <strong>Zeitleiste</strong> → Projekt bearbeiten pflegen.</p>
+      <p class="hint">Zuständige Teamleitung (PL) je Projekt: <strong>Teamleiter-Namen</strong> auf der Karte auf ein Projekt hier ziehen – oder die Zuweisung unter <strong>Zeitleiste</strong> → Projekt bearbeiten pflegen.</p>
       <div class="dashboard-project-chips" role="list">${state.projects
         .slice()
         .sort((a, b) => Number(a.ID) - Number(b.ID))
@@ -2684,7 +2683,7 @@ function renderDashboard() {
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
       </div>
       <p class="hint">
-        Reihenfolge der Blöcke: <strong>Griff</strong> (<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>) neben der Abteilungsüberschrift ziehen und auf eine andere Abteilung legen (wird in der Datei gespeichert).
+        Abteilungs-Reihenfolge: <strong>Griff</strong> (<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>) neben der Abteilungsüberschrift. Teamkarten: kleiner Griff links = Karte verschieben; <strong>Name</strong> ziehen = Projektleiter (PL) auf ein Projekt unten zuweisen (wird gespeichert).
       </p>
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
@@ -5339,7 +5338,7 @@ function setupDashboardDnD() {
     if (tlPlDrag instanceof HTMLElement) {
       const tlId = tlPlDrag.getAttribute("data-dashboard-drag-tl-to-project");
       if (!tlId || !getTeamLeader(tlId)) return;
-      tlPlDrag.classList.add("card-team__pl-assign-drag--dragging");
+      tlPlDrag.classList.add("card-team__title--pl-dragging");
       ev.dataTransfer.setData("application/x-dashboard-tl-to-project", tlId);
       ev.dataTransfer.setData("text/plain", `x-dashboard-tl-project:${tlId}`);
       ev.dataTransfer.effectAllowed = "copy";
@@ -5350,8 +5349,8 @@ function setupDashboardDnD() {
     view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
     view.querySelectorAll(".card-team--reorder-drag").forEach((el) => el.classList.remove("card-team--reorder-drag"));
     view
-      .querySelectorAll(".card-team__pl-assign-drag--dragging")
-      .forEach((el) => el.classList.remove("card-team__pl-assign-drag--dragging"));
+      .querySelectorAll(".card-team__title--pl-dragging")
+      .forEach((el) => el.classList.remove("card-team__title--pl-dragging"));
     view
       .querySelectorAll(".dashboard-abteilung--reorder-drag")
       .forEach((el) => el.classList.remove("dashboard-abteilung--reorder-drag"));
