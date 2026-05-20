@@ -5051,6 +5051,7 @@ function setupDashboardPointerDrag(view) {
     }
     st.row?.classList.remove("dashboard-emp-dragging");
     view.classList.remove("dashboard-view--touch-drag");
+    view.classList.remove("dashboard-view--employee-dragging");
     clearDashboardDropZoneHighlight();
     st.pointerId = null;
     st.id = null;
@@ -5098,6 +5099,7 @@ function setupDashboardPointerDrag(view) {
           st.active = true;
           st.row?.classList.add("dashboard-emp-dragging");
           view.classList.add("dashboard-view--touch-drag");
+          view.classList.add("dashboard-view--employee-dragging");
         }
         e.preventDefault();
         dashboardHighlightDropZoneUnderPoint(e.clientX, e.clientY);
@@ -5194,6 +5196,7 @@ function setupDashboardTouchDrag(view) {
     cleanupDocListeners();
     st.row?.classList.remove("dashboard-emp-dragging");
     view.classList.remove("dashboard-view--touch-drag");
+    view.classList.remove("dashboard-view--employee-dragging");
     clearDashboardDropZoneHighlight();
     st.id = null;
     st.row = null;
@@ -5233,6 +5236,7 @@ function setupDashboardTouchDrag(view) {
           st.active = true;
           st.row?.classList.add("dashboard-emp-dragging");
           view.classList.add("dashboard-view--touch-drag");
+          view.classList.add("dashboard-view--employee-dragging");
         }
         e.preventDefault();
         dashboardHighlightDropZoneUnderPoint(ti.clientX, ti.clientY);
@@ -5304,6 +5308,7 @@ function setupDashboardDnD() {
       const id = row.getAttribute("data-dashboard-employee");
       if (!id) return;
       row.classList.add("dashboard-emp-dragging");
+      view.classList.add("dashboard-view--employee-dragging");
       ev.dataTransfer.setData("text/plain", id);
       ev.dataTransfer.setData("application/x-employee-id", id);
       ev.dataTransfer.effectAllowed = "move";
@@ -5346,6 +5351,7 @@ function setupDashboardDnD() {
   });
 
   view.addEventListener("dragend", () => {
+    view.classList.remove("dashboard-view--employee-dragging");
     view.querySelectorAll(".dashboard-emp-dragging").forEach((el) => el.classList.remove("dashboard-emp-dragging"));
     view.querySelectorAll(".card-team--reorder-drag").forEach((el) => el.classList.remove("card-team--reorder-drag"));
     view
