@@ -752,6 +752,16 @@ code {
   color: var(--primary);
 }
 
+/* Dashboard: Export neben „Die Abteilung für die Person“ */
+.dashboard-teams-wrap__head {
+  align-items: flex-start;
+}
+
+.dashboard-teams-wrap__head h2 {
+  flex: 1;
+  min-width: 0;
+}
+
 
 .gantt-wrap {
   min-width: 0;
