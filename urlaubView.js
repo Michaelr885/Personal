@@ -91,6 +91,7 @@ import {
 import {
   getFeierlandCode,
   setFeierlandCode,
+  feierlandDisplayName,
   getNextHoliday,
   bundeslandHolidayNameDE,
   betrieblichFreierDezemberTagLabelDE,
