@@ -79,6 +79,8 @@ import {
   collectUrlaubPeriodenFromContainer,
   refreshUrlaubPeriodRowHalbUI,
   uniqueQualifications,
+  ensureStateQualifications,
+  syncLegacyAbsenceFields,
   ABTEILUNGEN,
   normalizeBeschäftigung,
   fillProjectLeiterSelect,
@@ -172,11 +174,7 @@ export function renderTeamLeadersTable() {
         t.Reihenfolge = i;
       });
       await persist();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
+      refreshAllDataViews();
     });
   });
 }
@@ -297,11 +295,7 @@ export function bindQualificationsTableOnce() {
       recordUndoSnapshot();
       applyQualificationRename(original, neu);
       await syncEmployeesThenPersist();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
+      refreshAllDataViews();
       return;
     }
     if (delBtn) {
@@ -324,11 +318,7 @@ export function bindQualificationsTableOnce() {
       recordUndoSnapshot();
       getState().qualifications = getState().qualifications.filter((q) => q !== original);
       await persist();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
+      refreshAllDataViews();
     }
   });
 }
@@ -393,11 +383,7 @@ export async function deleteEmployeeById(id) {
   getState().employees = getState().employees.filter((e) => Number(e.ID) !== id);
   getState().assignments = getState().assignments.filter((a) => Number(a.Employee_ID) !== id);
   await syncEmployeesThenPersist();
-  renderPersonnelView();
-  renderDashboard();
-  if ($("#view-projects").classList.contains("view--active")) {
-    renderProjectsView();
-  }
+  refreshAllDataViews();
 }
 
 export function setupPersonnelTableActions() {
@@ -602,9 +588,6 @@ export function renderPersonnelView() {
   fillTeamleaderAbteilungSelect("#new-tl-abteilung", ABTEILUNGEN[0]);
   syncEditAbsenceHint();
   syncNewAbsenceHint();
-  if ($("#view-urlaub")?.classList?.contains("view--active")) {
-    renderUrlaubPlan();
-  }
 }
 
 export function syncPersonnelMainUrlaubHalberWrap(which) {
@@ -702,11 +685,7 @@ export function setupPersonnelInteractions() {
       getState().qualifications.sort((a, b) => a.localeCompare(b, "de"));
       inp.value = "";
       await persist();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
+      refreshAllDataViews();
     });
   }
   $("#personnel-search").addEventListener("input", renderPersonnelTable);
@@ -807,11 +786,7 @@ export function setupPersonnelInteractions() {
       await syncEmployeesThenPersist();
     }
     resetEmployeeForm();
-    renderPersonnelView();
-    renderDashboard();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 
   $("#new-employee-form").addEventListener("submit", async (ev) => {
@@ -892,11 +867,7 @@ export function setupPersonnelInteractions() {
     renderUrlaubPeriodenContainer("new-emp-urlaub-perioden", []);
     syncPersonnelMainUrlaubHalberWrap("new-emp");
     fillNewEmployeeSelects();
-    renderPersonnelView();
-    renderDashboard();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 
   $("#new-teamleader-form").addEventListener("submit", async (ev) => {
@@ -917,11 +888,7 @@ export function setupPersonnelInteractions() {
     await persist();
     /** @type {HTMLFormElement} */ ($("#new-teamleader-form")).reset();
     /** @type {HTMLInputElement} */ ($("#new-tl-color")).value = "#64748b";
-    renderPersonnelView();
-    renderDashboard();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 
   const tlBackdrop = /** @type {HTMLElement | null} */ ($("#teamleader-modal-backdrop"));
@@ -954,11 +921,7 @@ export function setupPersonnelInteractions() {
       tl.Abteilung = normalizeAbteilung(/** @type {HTMLSelectElement} */ ($("#teamleader-form-abteilung")).value);
       await persist();
       closeTeamLeaderEditModal();
-      renderPersonnelView();
-      renderDashboard();
-      if ($("#view-projects").classList.contains("view--active")) {
-        renderProjectsView();
-      }
+      refreshAllDataViews();
     });
   }
 }

@@ -67,6 +67,7 @@ import {
   syncEmployeeStatusesFromAbsenceDates,
   runAutoStatusSyncAndPersist,
   syncEmployeesThenPersist,
+  syncLegacyAbsenceFields,
   plannedWindowVisibleOnDashboard,
   employeeMatchesDashboardAbsencePanel,
   verfügbarDashboardAbsenceDisplayWindow,
@@ -562,11 +563,7 @@ export function setupDashboardAbsenceModal() {
     getState().employees[idx] = next;
     await syncEmployeesThenPersist();
     closeDashboardAbsenceModal();
-    renderDashboard();
-    renderPersonnelView();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 }
 
@@ -614,10 +611,7 @@ export async function dashboardHandleEmployeeDrop(empId, targetEl) {
     emp.Teamleiter_ID = Number(tlId);
   }
   await persist();
-  renderDashboard();
-  if ($("#view-personnel").classList.contains("view--active")) {
-    renderPersonnelView();
-  }
+  refreshAllDataViews();
 }
 
 /** Hebt die Zone unter (x,y) hervor (Touch-Zug). */
@@ -1086,10 +1080,7 @@ export function setupDashboardDnD() {
         recordUndoSnapshot();
         reorderDashboardAbteilungen(abtReorder, toAbt);
         await persist();
-        renderDashboard();
-        if ($("#view-personnel").classList.contains("view--active")) {
-          renderPersonnelView();
-        }
+        refreshAllDataViews();
       }
       return;
     }
@@ -1102,10 +1093,7 @@ export function setupDashboardDnD() {
         recordUndoSnapshot();
         reorderTeamLeadersOnDashboard(tlReorder, toId);
         await persist();
-        renderDashboard();
-        if ($("#view-personnel").classList.contains("view--active")) {
-          renderPersonnelView();
-        }
+        refreshAllDataViews();
       }
       return;
     }
@@ -1121,10 +1109,7 @@ export function setupDashboardDnD() {
         recordUndoSnapshot();
         proj.leiterId = String(tl.ID);
         await persist();
-        renderDashboard();
-        if ($("#view-projects").classList.contains("view--active")) {
-          renderProjectsView();
-        }
+        refreshAllDataViews();
       }
       return;
     }

@@ -127,6 +127,8 @@ const empImports = `import {
   collectUrlaubPeriodenFromContainer,
   refreshUrlaubPeriodRowHalbUI,
   uniqueQualifications,
+  ensureStateQualifications,
+  syncLegacyAbsenceFields,
   ABTEILUNGEN,
   normalizeBeschäftigung,
   fillProjectLeiterSelect,

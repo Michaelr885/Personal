@@ -269,12 +269,7 @@ export async function applyProjectDatesFromGantt(projectId, startISO, endISO) {
     if (ae) ae.value = endISO;
     renderProjectDetail();
   }
-  renderDashboard();
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      renderGantt();
-    });
-  });
+  refreshAllDataViews();
 }
 
 /**
@@ -918,8 +913,7 @@ export function renderProjectDetail() {
       renderProjectDetail();
       renderProjectDropZones();
       renderEmployeePool();
-      renderDashboard();
-      renderGantt();
+      refreshAllDataViews();
     });
   });
 }
@@ -1006,8 +1000,7 @@ export async function pushAssignmentAndRefresh(employeeId, projectId, start, end
   renderProjectDetail();
   renderProjectDropZones();
   renderEmployeePool();
-  renderDashboard();
-  renderGantt();
+  refreshAllDataViews();
 }
 
 export async function submitAssignment(employeeId, projectId, start, end) {
@@ -1148,8 +1141,7 @@ export function setupProjectsInteractions() {
       getState().projects = getState().projects.filter((p) => Number(p.ID) !== pid);
       getState().assignments = getState().assignments.filter((a) => Number(a.Project_ID) !== pid);
       await persist();
-      renderProjectsView();
-      renderDashboard();
+      refreshAllDataViews();
     }
   });
 
@@ -1220,8 +1212,7 @@ export function setupProjectsInteractions() {
           { variant: "info", confirmText: "Verstanden" }
         );
         closeProjectModal();
-        renderProjectsView();
-        renderDashboard();
+        refreshAllDataViews();
         return;
       }
     }
@@ -1249,9 +1240,7 @@ export function setupProjectsInteractions() {
     }
     await persist();
     closeProjectModal();
-    renderProjectsView();
-    renderDashboard();
-    renderGantt();
+    refreshAllDataViews();
   });
 
   bindGanttProjectDateDocumentSync();
