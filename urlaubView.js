@@ -41,6 +41,7 @@ import {
 import {
   empQualHue,
   normalizeAbteilung,
+  normalizeUrlaubPerioden,
   normalizeAllEmployeesShape,
   ensureDashboardAbteilungReihenfolge,
   getEmployee,
@@ -91,6 +92,7 @@ import {
 import {
   getFeierlandCode,
   setFeierlandCode,
+  feierlandDisplayName,
   getNextHoliday,
   bundeslandHolidayNameDE,
   betrieblichFreierDezemberTagLabelDE,
@@ -716,11 +718,6 @@ export function setupUrlaubGanttBlockModal() {
     getState().employees[idx] = emp;
     await syncEmployeesThenPersist();
     closeUrlaubGanttBlockModal();
-    renderUrlaubPlan();
-    renderPersonnelView();
-    renderDashboard();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 }
