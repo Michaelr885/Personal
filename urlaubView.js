@@ -91,6 +91,7 @@ import {
 import {
   getFeierlandCode,
   setFeierlandCode,
+  feierlandDisplayName,
   getNextHoliday,
   bundeslandHolidayNameDE,
   betrieblichFreierDezemberTagLabelDE,
@@ -340,11 +341,10 @@ export function renderUrlaubPlan() {
     const bars = segs.length
       ? segs
           .map((s) => {
-            const halfLabel = s.halber ? " · halber Tag (0,5)" : "";
             const fullTitle =
               s.rangeBis === ""
-                ? `${formatDateDE(s.rangeVon)}–…${halfLabel} (Bearbeiten)`
-                : `${formatDateDE(s.rangeVon)}–${formatDateDE(s.rangeBis)}${halfLabel}`;
+                ? `${formatDateDE(s.rangeVon)}–… (Bearbeiten)`
+                : `${formatDateDE(s.rangeVon)}–${formatDateDE(s.rangeBis)}`;
             const dbAttr = escapeHtml(s.rangeBis);
             const halfCls = s.halber ? " urlaub-bar--half" : "";
             return `<div class="urlaub-bar${halfCls}" style="grid-column:${s.gs} / ${s.ge}; grid-row:${s.row}" title="${escapeHtml(
