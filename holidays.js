@@ -1,3 +1,9 @@
+/**
+ * Feiertage und Arbeitstage (Bundesland in der Sidebar).
+ *
+ * Berechnet gesetzliche Feiertage, „betrieblich freie“ Dez.-Tage, zählt
+ * Urlaubs-Arbeitstage und liefert den nächsten Feiertag fürs Dashboard.
+ */
 import { pad2, parseISODate, todayISO, addCalendarDaysToISO } from "./utils.js";
 
 export const STORAGE_FEIERLAND = "app_feierland";

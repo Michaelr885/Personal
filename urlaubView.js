@@ -1,3 +1,9 @@
+/**
+ * Tab „Urlaub“: Monatskalender, Jahresstatistik, Urlaub eintragen/bearbeiten.
+ *
+ * Filter nach Abteilung/Qualifikation, Gantt-ähnliche Urlaubsbalken, Modal zum
+ * Anlegen von Urlaubszeiträumen (inkl. halber Tage). Feiertage → holidays.js.
+ */
 import {
   getState,
   setState,

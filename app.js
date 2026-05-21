@@ -1,5 +1,9 @@
 /**
- * Einstiegspunkt: lädt Module, registriert View-Refresh, startet die App.
+ * Einstiegspunkt der App (wird von index.html geladen).
+ *
+ * Startet nach dem Laden der Seite: verknüpft daten.json, schaltet Tabs um,
+ * ruft die render/setup-Funktionen der View-Module auf. Hier beginnt das Lesen
+ * des Codes — die Fachlogik steckt in state.js, employees.js und *View.js.
  */
 import { linkLocalDataFile, isFileSystemAccessSupported, getLinkedFileName } from "./fileHandler.js";
 import { $, $all, escapeHtml } from "./utils.js";

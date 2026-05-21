@@ -1,3 +1,9 @@
+/**
+ * Tab „Zeitleiste“: Gantt-Chart, Projektliste, Ressourcenpool, Zuweisungen.
+ *
+ * Projekte bearbeiten, Mitarbeitende per Drag auf Projekte legen, Gantt-Balken
+ * und Konflikt-Dialoge. Nutzt die externe Bibliothek „Frappe Gantt“ (über index.html).
+ */
 import {
   getState,
   setState,

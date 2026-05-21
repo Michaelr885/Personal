@@ -1,4 +1,9 @@
-/** DOM-, Datums- und Format-Helfer. */
+/**
+ * Kleine Hilfsfunktionen ohne eigene Geschäftslogik.
+ *
+ * DOM ($, $all), ISO-Datum (todayISO, formatDateDE), HTML escapen, CSV-Zellen.
+ * Wird von fast allen Modulen importiert — hier nichts mit „Urlaub“ oder „Projekt“ regeln.
+ */
 
 export function isSingleCalendarDayUrlaub(/** @type {string} */ von, /** @type {string|null|undefined} */ bis) {
   if (!von || String(von).trim() === "") return false;

@@ -1,3 +1,9 @@
+/**
+ * Tab „Dashboard“: Teamkarten, Drag & Drop, Abwesenheit melden, CSV-Export.
+ *
+ * Zeigt Teams nach Abteilung, verfügbare Personen, Projekt-Chips und die
+ * Abwesenheitsliste. Interaktionen (Maus/Touch/Pointer) sind hier gebündelt.
+ */
 import {
   getState,
   setState,

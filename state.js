@@ -1,5 +1,10 @@
 /**
- * Zentraler App-State, Persistenz, Undo/Redo, Planungsmodus, globale Modale.
+ * Zentrale Datenhaltung und globale App-Funktionen.
+ *
+ * - getState() / setState(): alle Mitarbeitenden, Projekte, Zuweisungen, …
+ * - persist(): speichert in die verknüpfte daten.json
+ * - Undo/Redo (Strg+Z / Strg+Y), Planungsmodus (Sandkasten)
+ * - openModal(), openAssignmentConflictModal()
  */
 import {
   linkLocalDataFile,

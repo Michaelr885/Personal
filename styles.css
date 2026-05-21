@@ -1,3 +1,7 @@
+/**
+ * Layout und Design der gesamten App (Hell/Dunkel, Abstände, Dashboard, Gantt, Tabellen).
+ * Keine Geschäftslogik — nur Aussehen. HTML-Struktur steht in index.html.
+ */
 :root {
   --bg: #f1f5f9;
   --surface: #ffffff;

@@ -1,6 +1,9 @@
 /**
- * Lokale Persistenz über die File System Access API (Chrome/Edge, localhost/https).
- * Hält ein FileSystemFileHandle im Speicher und schreibt `daten.json` bei Bedarf vollständig neu.
+ * Lesen und Schreiben der Datei daten.json auf dem Rechner.
+ *
+ * Nutzt die File System Access API (Chrome/Edge, nur mit localhost oder HTTPS).
+ * Nach „Datei verknüpfen“ merkt sich die App das Handle und speichert bei
+ * jeder Änderung den kompletten JSON-Inhalt — siehe auch state.js → persist().
  */
 
 /** @type {FileSystemFileHandle | null} */

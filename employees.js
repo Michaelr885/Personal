@@ -1,3 +1,12 @@
+/**
+ * Mitarbeiter-, Urlaubs- und Teamleiter-Logik (ohne komplette Bildschirme).
+ *
+ * Enthält u. a.: Normalisierung der Daten, Urlaubszeiträume, automatischer Status
+ * (Krank/Urlaub/Verfügbar), Teamleiter-Zuordnung, Zuweisungs-Konfliktprüfung,
+ * HTML-Snippets für Abwesenheits-Badges.
+ *
+ * UI für Tabs → siehe dashboardView.js, personnelView.js, urlaubView.js, ganttView.js.
+ */
 import { getState, persist } from "./state.js";
 import {
   $,

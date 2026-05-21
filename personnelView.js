@@ -1,3 +1,9 @@
+/**
+ * Tab „Personalverwaltung“: Mitarbeitertabelle, Formulare, Qualifikationen, Teamleiter.
+ *
+ * Anlegen/Bearbeiten/Löschen von Personen, Qualifikationsliste pflegen,
+ * Teamleiter-Verwaltung. Schreibt über state.js in die verknüpfte daten.json.
+ */
 import {
   getState,
   setState,
