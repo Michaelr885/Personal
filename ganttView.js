@@ -62,6 +62,7 @@ import {
   dashboardMemberAbsenceBlock,
   todayWithinInclusiveISO,
   isDayInAbsenceRange,
+  isDayInAnyUrlaubRange,
   isDayAfterClosedAbsenceRange,
   computeAutoStatusForEmployee,
   syncEmployeeStatusesFromAbsenceDates,
