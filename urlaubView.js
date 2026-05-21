@@ -41,6 +41,7 @@ import {
 import {
   empQualHue,
   normalizeAbteilung,
+  normalizeUrlaubPerioden,
   normalizeAllEmployeesShape,
   ensureDashboardAbteilungReihenfolge,
   getEmployee,
@@ -91,7 +92,6 @@ import {
 import {
   getFeierlandCode,
   setFeierlandCode,
-  feierlandDisplayName,
   getNextHoliday,
   bundeslandHolidayNameDE,
   betrieblichFreierDezemberTagLabelDE,
