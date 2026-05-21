@@ -107,6 +107,12 @@ export const URLAUB_GANTT_MODAL_HINT_NEW =
 export const URLAUB_GANTT_MODAL_HINT_EDIT =
   "Sie bearbeiten einen <strong>bestehenden</strong> Zeitraum (Haupt-Urlaub oder Zusatzeintrag). Leeres „Bis“ = offenes Ende.";
 
+/** Angezeigter Monat in der Urlaubsplan-Ansicht (Jahr, Monat 0–11). */
+export let urlaubCalendarYM = (() => {
+  const d = new Date();
+  return { y: d.getFullYear(), m: d.getMonth() };
+})();
+
 export function shiftUrlaubMonth(delta) {
   urlaubCalendarYM.m += delta;
   while (urlaubCalendarYM.m < 0) {

@@ -66,13 +66,13 @@ fs.writeFileSync(
   `/** DOM-, Datums- und Format-Helfer (ohne App-State). */\n\n${utilsBody}\n`
 );
 
-const holidaysRanges = [[1231, 1448]];
+const holidaysRanges = [[1202, 1448]];
 let holidaysBody = extract(holidaysRanges);
 holidaysBody = exportFunctions(holidaysBody);
 holidaysBody = exportConsts(holidaysBody, ["BUNDESLAND_LIST", "STORAGE_FEIERLAND"]);
 fs.writeFileSync(
   path.join(root, "holidays.js"),
-  `import { pad2, parseISODate, todayISO, addCalendarDaysToISO } from "./utils.js";\n\n${holidaysBody}\n`
+  `import { pad2, parseISODate, todayISO, addCalendarDaysToISO, daysUntilISODate } from "./utils.js";\n\n${holidaysBody}\n`
 );
 
 console.log("Wrote utils.js and holidays.js — run full split manually for remaining modules.");

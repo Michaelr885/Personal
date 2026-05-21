@@ -181,7 +181,7 @@ fs.writeFileSync(
 writeView("personnelView", [[3927, 4788]]);
 
 let urlaubCode =
-  sliceOrig(1103, 1107) +
+  sliceOrig(483, 486) +
   "\n\n" +
   sliceOrig(1434, 2047);
 urlaubCode = exportAllFunctions(exportConsts(urlaubCode, ["urlaubCalendarYM", "URLAUB_GANTT_MODAL_HINT_NEW", "URLAUB_GANTT_MODAL_HINT_EDIT"]));
