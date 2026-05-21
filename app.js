@@ -1093,6 +1093,13 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+/** Ein Feld für CSV (Semikolon, Excel DE): bei Sonderzeichen in doppelte Anführungszeichen einschließen. */
+function csvSemicolonCell(raw) {
+  const s = String(raw ?? "");
+  if (/[;"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 const URLAUB_GANTT_MODAL_HINT_NEW =
   "Wird als <strong>weiterer Urlaubszeitraum</strong> gespeichert (wie in der Personalverwaltung). Leeres „Bis“ = offenes Ende ab „Von“.";
 
@@ -2679,11 +2686,15 @@ function renderDashboard() {
       ${unassignedChips}
     </div>
     <div class="panel dashboard-teams-wrap">
-      <div class="panel__head">
+      <div class="panel__head panel__head--wrap dashboard-teams-wrap__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
+        <button type="button" class="btn btn--small btn--sidebar-secondary" data-dashboard-export-teams title="Abteilungen, Teamleitungen und zugeordnete Mitarbeitende als CSV-Datei speichern (mit Excel öffnen)">
+          <i class="fa-solid fa-file-excel" aria-hidden="true"></i> Export
+        </button>
       </div>
       <p class="hint">
         Abteilungs-Reihenfolge: <strong>Griff</strong> (<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>) neben der Abteilungsüberschrift. Teamkarten: kleiner Griff links = Karte verschieben; <strong>Name</strong> ziehen = Projektleiter (PL) auf ein Projekt unten zuweisen (wird gespeichert).
+        <strong>Export</strong> oben rechts: dieselbe Übersicht als CSV-Datei für Excel.
       </p>
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>
@@ -5544,6 +5555,88 @@ function setupDashboardDnD() {
   }
 }
 
+/**
+ * Exportiert den Dashboard-Abschnitt „Abteilung für die Person“ wie angezeigt:
+ * Reihenfolge der Abteilungen, Teamleiter, darunter alle zugeordneten Mitarbeitenden.
+ * Dateiformat: UTF-8 mit BOM, Semikolon-getrennt (Excel unter Windows).
+ */
+function exportDashboardTeamsSpreadsheet() {
+  if (!state) return;
+  ensureDashboardAbteilungReihenfolge();
+  const sep = ";";
+  const headers = [
+    "Abteilung",
+    "Teamleiter",
+    "Mitarbeiter_ID",
+    "Personalnummer",
+    "Vorname",
+    "Nachname",
+    "Qualifikation",
+    "Status",
+    "Beschäftigung",
+    "Stufe",
+    "Abteilung_Stammdaten",
+    "Zusatz_Tags",
+  ];
+  /** @type {string[][]} */
+  const rows = [headers];
+  const sortedTls = teamLeadersSortedForDashboard();
+  const deptsOrdered = [...state.dashboard_abteilung_reihenfolge];
+  for (const abt of deptsOrdered) {
+    const tls = sortedTls.filter((tl) => normalizeAbteilung(tl.Abteilung) === abt);
+    if (!tls.length) continue;
+    for (const tl of tls) {
+      const tlName = String(tl.Name ?? "").trim() || `TL ${tl.ID}`;
+      const members = state.employees.filter((e) => Number(e.Teamleiter_ID) === Number(tl.ID));
+      if (members.length === 0) {
+        rows.push([abt, tlName, "", "", "", "", "", "", "", "", "", ""]);
+        continue;
+      }
+      for (const m of members) {
+        const tags = Array.isArray(m.Zusatz_Tags) ? m.Zusatz_Tags.map((t) => String(t ?? "").trim()).filter(Boolean).join(", ") : "";
+        rows.push([
+          abt,
+          tlName,
+          String(m.ID),
+          String(m.Personalnummer ?? ""),
+          String(m.Vorname ?? ""),
+          String(m.Nachname ?? ""),
+          String(m.Qualifikation ?? ""),
+          String(m.Status ?? ""),
+          String(m.Beschäftigung ?? ""),
+          String(m.Stufe ?? ""),
+          normalizeAbteilung(m.Abteilung),
+          tags,
+        ]);
+      }
+    }
+  }
+  const lines = rows.map((r) => r.map(csvSemicolonCell).join(sep));
+  const content = `\uFEFF${lines.join("\r\n")}`;
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Dashboard-Teams_${todayISO()}.csv`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Klick auf „Export“ im Team-Dashboard (Delegation, bleibt über `renderDashboard` gültig). */
+function setupDashboardTeamsExport() {
+  const view = /** @type {HTMLElement | null} */ ($("#view-dashboard"));
+  if (!view || view.dataset.exportTeams === "1") return;
+  view.dataset.exportTeams = "1";
+  view.addEventListener("click", (ev) => {
+    const btn = ev.target instanceof Element ? ev.target.closest("[data-dashboard-export-teams]") : null;
+    if (!(btn instanceof HTMLElement)) return;
+    exportDashboardTeamsSpreadsheet();
+  });
+}
+
 function setupAutoEmployeeStatusSync() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible" || !state) return;
@@ -5566,6 +5659,7 @@ function boot() {
   setupNavigation();
   setupPlanningModeControls();
   setupDashboardDnD();
+  setupDashboardTeamsExport();
   setupDashboardAbsenceModal();
   setupProjectsInteractions();
   setupPersonnelInteractions();
