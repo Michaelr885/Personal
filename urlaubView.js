@@ -717,11 +717,6 @@ export function setupUrlaubGanttBlockModal() {
     getState().employees[idx] = emp;
     await syncEmployeesThenPersist();
     closeUrlaubGanttBlockModal();
-    renderUrlaubPlan();
-    renderPersonnelView();
-    renderDashboard();
-    if ($("#view-projects").classList.contains("view--active")) {
-      renderProjectsView();
-    }
+    refreshAllDataViews();
   });
 }
