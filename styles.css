@@ -2222,6 +2222,8 @@ textarea {
   --status-krank-soft: rgba(248, 113, 113, 0.14);
   --status-urlaub: #60a5fa;
   --status-urlaub-soft: rgba(96, 165, 250, 0.2);
+  --status-urlaub-half: #2dd4bf;
+  --status-urlaub-half-soft: rgba(45, 212, 191, 0.24);
   --team-fallback: #94a3b8;
 }
 
