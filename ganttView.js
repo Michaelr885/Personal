@@ -97,6 +97,17 @@ import {
   BUNDESLAND_LIST,
 } from "./holidays.js";
 
+let ganttInstance = null;
+/** @type {"Day"|"Week"|"Month"} */
+let ganttViewMode = "Month";
+
+/** Gantt: Projektnamen entlang des Balkens wiederholen (horizontal scrollbar). */
+/** @type {MutationObserver | null} */
+let ganttBarLabelRepeatObserver = null;
+/** @type {AbortController | null} */
+let ganttBarLabelRepeatAbort = null;
+let ganttBarLabelRepeatLayoutRaf = 0;
+
 export function teardownProjectGanttBarLabelRepeats() {
   if (ganttBarLabelRepeatObserver) {
     ganttBarLabelRepeatObserver.disconnect();

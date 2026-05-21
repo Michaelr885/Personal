@@ -171,11 +171,15 @@ writeView(
 
 let ganttCode = sliceOrig(2731, 3925);
 ganttCode = exportAllFunctions(ganttCode);
-ganttCode = exportConsts(ganttCode, ["ganttInstance", "ganttViewMode"]);
 ganttCode = useGetState(ganttCode);
+const ganttModulePreamble = `let ganttInstance = null;
+/** @type {"Day"|"Week"|"Month"} */
+let ganttViewMode = "Month";
+
+`;
 fs.writeFileSync(
   path.join(root, "ganttView.js"),
-  `${stateImports}${utilsImports}${empImports}${holImports}\n${ganttCode}\n`
+  `${stateImports}${utilsImports}${empImports}${holImports}\n${ganttModulePreamble}${ganttCode}\n`
 );
 
 writeView("personnelView", [[3927, 4788]]);
