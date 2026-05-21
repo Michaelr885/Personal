@@ -17,6 +17,14 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
+  <!--
+    Markup-Überblick (Logik in app.js):
+    - .app-shell: Sidebar + <main class="main">
+    - #gate-screen: Hinweis bis zur ersten daten.json-Verknüpfung
+    - #app-workspace: eigentliche App (nach erfolgreichem Dateiload sichtbar)
+    - Hauptansichten: #view-dashboard, #view-projects, #view-personnel, #view-urlaub (nur eine mit .view--active)
+    - Modale / Backdrops: IDs mit modal-*, dash-abs-*, dnd-modal-*, teamleader-modal (an app.js gekoppelt)
+  -->
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Hauptnavigation">
@@ -85,6 +93,7 @@
       </aside>
 
       <main class="main">
+        <!-- Startbildschirm: verschwindet, sobald gültige Daten geladen sind (siehe setupFileLinking). -->
         <section id="gate-screen" class="gate-screen panel" aria-live="polite">
           <div class="gate-screen__inner">
             <i class="fa-regular fa-folder-open gate-screen__icon" aria-hidden="true"></i>
@@ -101,6 +110,7 @@
           </div>
         </section>
 
+        <!-- Arbeitsfläche inkl. Planungsmodus-Banner; bleibt hidden bis State aus Datei steht. -->
         <div id="app-workspace" class="app-workspace" hidden>
           <div id="planning-banner" class="planning-banner" hidden role="region" aria-label="Planungsmodus">
             <p class="planning-banner__text">
@@ -125,10 +135,12 @@
             </p>
           </header>
 
+          <!-- Dashboard: Inhalt wird per JS in #dashboard-content injiziert (renderDashboard). -->
           <section id="view-dashboard" class="view view--active" aria-labelledby="page-title">
             <div id="dashboard-content" class="stack"></div>
           </section>
 
+          <!-- Zeitleiste: Gantt (#gantt-container), Projekttabelle, Pool, Zuweisung (renderProjectsView). -->
           <section id="view-projects" class="view" hidden aria-labelledby="page-title">
             <div class="panel gantt-panel">
               <div class="panel__head panel__head--wrap gantt-panel__head">
@@ -245,6 +257,7 @@
             </div>
           </section>
 
+          <!-- Personalverwaltung: Qualifikationen, Stammdaten-Tabelle, Teamleiter (renderPersonnelView). -->
           <section id="view-personnel" class="view" hidden aria-labelledby="page-title">
             <div class="panel">
               <div class="panel__head panel__head--wrap">
@@ -647,6 +660,7 @@
             </div>
           </section>
 
+          <!-- Urlaubsplan: Monatsraster #urlaub-plan-root, Statistik (renderUrlaubPlan). -->
           <section id="view-urlaub" class="view" hidden aria-labelledby="page-title">
             <div class="panel">
               <div class="panel__head panel__head--wrap">
