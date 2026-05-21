@@ -2688,13 +2688,19 @@ function renderDashboard() {
     <div class="panel dashboard-teams-wrap">
       <div class="panel__head panel__head--wrap dashboard-teams-wrap__head">
         <h2><i class="fa-solid fa-building-user"></i> Die Abteilung für die Person</h2>
-        <button type="button" class="btn btn--small btn--sidebar-secondary" data-dashboard-export-teams title="Abteilungen, Teamleitungen und zugeordnete Mitarbeitende als CSV-Datei speichern (mit Excel öffnen)">
-          <i class="fa-solid fa-file-excel" aria-hidden="true"></i> Export
+        <button
+          type="button"
+          class="dashboard-teams-export-btn"
+          data-dashboard-export-teams
+          title="Abteilungen, Teamleitungen und Mitarbeitende als CSV speichern (in Excel öffnen)"
+          aria-label="Teams als CSV exportieren"
+        >
+          <i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>
         </button>
       </div>
       <p class="hint">
         Abteilungs-Reihenfolge: <strong>Griff</strong> (<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>) neben der Abteilungsüberschrift. Teamkarten: kleiner Griff links = Karte verschieben; <strong>Name</strong> ziehen = Projektleiter (PL) auf ein Projekt unten zuweisen (wird gespeichert).
-        <strong>Export</strong> oben rechts: dieselbe Übersicht als CSV-Datei für Excel.
+        Dezentes Download-Symbol oben rechts: gleiche Übersicht als CSV für Excel.
       </p>
       <div class="dashboard-abteilungen-stack">${teamSectionsHtml}</div>
     </div>

@@ -752,14 +752,58 @@ code {
   color: var(--primary);
 }
 
-/* Dashboard: Export neben „Die Abteilung für die Person“ */
+/* Dashboard: dezenter Mini-Export oben rechts in der Panel-Kopfzeile */
 .dashboard-teams-wrap__head {
-  align-items: flex-start;
+  position: relative;
+  align-items: center;
+  padding-right: 1.75rem;
 }
 
 .dashboard-teams-wrap__head h2 {
   flex: 1;
   min-width: 0;
+}
+
+.dashboard-teams-export-btn {
+  position: absolute;
+  top: 0.12rem;
+  right: 0;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    color 0.12s ease,
+    opacity 0.12s ease,
+    background 0.12s ease;
+}
+
+.dashboard-teams-export-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.dashboard-teams-export-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .dashboard-teams-export-btn:hover {
+  background: rgba(59, 130, 246, 0.18);
 }
 
 
