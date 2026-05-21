@@ -137,6 +137,7 @@ const empImports = `import {
 const holImports = `import {
   getFeierlandCode,
   setFeierlandCode,
+  feierlandDisplayName,
   getNextHoliday,
   bundeslandHolidayNameDE,
   betrieblichFreierDezemberTagLabelDE,
