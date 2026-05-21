@@ -4,7 +4,48 @@
  * Berechnet gesetzliche Feiertage, „betrieblich freie“ Dez.-Tage, zählt
  * Urlaubs-Arbeitstage und liefert den nächsten Feiertag fürs Dashboard.
  */
-import { pad2, parseISODate, todayISO, addCalendarDaysToISO } from "./utils.js";
+import {
+  pad2,
+  parseISODate,
+  todayISO,
+  addCalendarDaysToISO,
+  daysUntilISODate,
+} from "./utils.js";
+
+/** Ostersonntag, lokales Mittag (gregorianisch). */
+function easterSundayLocalMidday(/** @type {number} */ year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+/** @param {Date} d @param {number} n */
+function addCalendarDaysToDate(d, n) {
+  const x = new Date(d.getTime());
+  x.setDate(x.getDate() + n);
+  x.setHours(12, 0, 0, 0);
+  return x;
+}
+
+/** @param {Date} d */
+function toISODateLocal(d) {
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
 
 export const STORAGE_FEIERLAND = "app_feierland";
 const STORAGE_THEME = "app_theme";
@@ -207,20 +248,4 @@ export function countUrlaubWorkdaysInInclusiveRange(isoStart, isoEnd) {
     cur = nxt;
   }
   return c;
-}
-
-export function shiftUrlaubMonth(delta) {
-  urlaubCalendarYM.m += delta;
-  while (urlaubCalendarYM.m < 0) {
-    urlaubCalendarYM.m += 12;
-    urlaubCalendarYM.y -= 1;
-  }
-  while (urlaubCalendarYM.m > 11) {
-    urlaubCalendarYM.m -= 12;
-    urlaubCalendarYM.y += 1;
-  }
-}
-
-export function shiftUrlaubYear(delta) {
-  urlaubCalendarYM.y += delta;
 }
