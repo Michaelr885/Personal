@@ -89,6 +89,7 @@ const utilsImports = `import {
 const empImports = `import {
   empQualHue,
   normalizeAbteilung,
+  normalizeUrlaubPerioden,
   normalizeAllEmployeesShape,
   ensureDashboardAbteilungReihenfolge,
   getEmployee,
