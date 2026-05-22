@@ -876,6 +876,9 @@
             „Bis“ = offenes Ende ab „Von“.
           </p>
           <div class="modal__actions span-2 modal__actions--start">
+            <button type="button" class="btn btn--danger" id="urlaub-gantt-block-delete" hidden>
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Löschen
+            </button>
             <button type="button" class="btn" id="urlaub-gantt-block-cancel">Abbrechen</button>
             <button type="submit" class="btn btn--primary">
               <i class="fa-solid fa-floppy-disk"></i> Speichern
@@ -974,6 +977,6 @@
 
     <!-- Gantt-Bibliothek (Zeitleiste); App-Start über app.js → siehe README.md -->
     <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
-    <script type="module" src="app.js?v=0ba8f01"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
