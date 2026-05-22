@@ -1395,6 +1395,15 @@ code {
   z-index: 64;
 }
 
+/* Generischer Bestätigungsdialog (#modal) über allen Fach-Modals (Urlaub, Dashboard, …) */
+#modal-backdrop {
+  z-index: 80;
+}
+
+#modal {
+  z-index: 81;
+}
+
 .btn--delete-icon {
   color: var(--status-krank);
   border-color: transparent;
