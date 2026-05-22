@@ -275,6 +275,7 @@ export function renderUrlaubPlan() {
   for (let d = 1; d <= days; d++) {
     const dt = new Date(y, m, d);
     const iso = isoFromYearMonthDay(y, m, d);
+    const isToday = iso === todayISO();
     const w = dt.getDay();
     const isWe = w === 0 || w === 6;
     const hName = bundeslandHolidayNameDE(iso);
