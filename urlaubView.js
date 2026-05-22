@@ -464,6 +464,14 @@ export function setupUrlaubView() {
   }
 }
 
+/** Löschen-Button nur im Bearbeitungsmodus (bestehender Balken), nicht beim Neuanlegen. */
+export function syncUrlaubGanttDeleteButtonVisibility() {
+  const delBtn = /** @type {HTMLButtonElement | null} */ ($("#urlaub-gantt-block-delete"));
+  const origSlot = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"))?.value ?? "";
+  const isEdit = origSlot === "haupt" || origSlot === "zusatz";
+  if (delBtn) delBtn.hidden = !isEdit;
+}
+
 export function syncUrlaubGanttHalberTagWrapVisibility() {
   const wrap = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-halber-wrap"));
   const halbCb = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-halber-tag"));
@@ -499,6 +507,7 @@ export function closeUrlaubGanttBlockModal() {
   const md = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-modal"));
   if (bd) bd.hidden = true;
   if (md) md.hidden = true;
+  syncUrlaubGanttDeleteButtonVisibility();
 }
 
 /**
@@ -556,7 +565,67 @@ export function openUrlaubGanttBlockModal(empId, vonISO, bisISO, editMeta = null
   if (bd) bd.hidden = false;
   if (md) md.hidden = false;
   syncUrlaubGanttHalberTagWrapVisibility();
+  syncUrlaubGanttDeleteButtonVisibility();
   vEl?.focus();
+}
+
+/** Entfernt den bearbeiteten Urlaubszeitraum (Haupt- oder Zusatzeintrag) nach Bestätigung. */
+export async function deleteUrlaubGanttBlockPeriod() {
+  if (!getState()) return;
+  const idRaw = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-emp-id"))?.value;
+  const empId = Number(idRaw);
+  const origSlot = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-slot"))?.value ?? "";
+  const origVon = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-von"))?.value?.trim() ?? "";
+  const origBisRaw = /** @type {HTMLInputElement | null} */ ($("#urlaub-gantt-block-orig-bis"))?.value?.trim() ?? "";
+  if (origSlot !== "haupt" && origSlot !== "zusatz") return;
+  if (!origVon) return;
+  const idx = getState().employees.findIndex((e) => Number(e.ID) === empId);
+  if (idx < 0) return;
+  const emp = getState().employees[idx];
+  const origBisNull = origBisRaw === "" ? null : origBisRaw;
+  const vonDe = formatDateDE(origVon);
+  const bisDe = origBisNull ? formatDateDE(origBisNull) : "offen";
+  const ok = await openModal(
+    "Urlaub löschen",
+    `<div>Zeitraum <strong>${escapeHtml(vonDe)}</strong> – <strong>${escapeHtml(bisDe)}</strong> wirklich entfernen?</div>`,
+    { confirmText: "Löschen", cancelText: "Abbrechen", confirmDanger: true }
+  );
+  if (!ok) return;
+  if (origSlot === "haupt") {
+    if (String(emp.Urlaub_ab || "") !== origVon || bisNormUrlaub(emp.Urlaub_bis) !== bisNormUrlaub(origBisNull)) {
+      await openModal(
+        "Hinweis",
+        "<div>Der Haupt-Urlaub wurde zwischenzeitlich geändert. Bitte die Ansicht aktualisieren (z. B. Monat wechseln).</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    recordUndoSnapshot();
+    emp.Urlaub_ab = null;
+    emp.Urlaub_bis = null;
+    emp.Urlaub_halber_Tag = false;
+  } else {
+    const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+    const oi = normalized.findIndex(
+      (p) => p.von === origVon && bisNormUrlaub(p.bis) === bisNormUrlaub(origBisNull)
+    );
+    if (oi < 0) {
+      await openModal(
+        "Hinweis",
+        "<div>Dieser Zusatz-Zeitraum wurde zwischenzeitlich entfernt oder geändert.</div>",
+        { variant: "info", confirmText: "Verstanden" }
+      );
+      return;
+    }
+    recordUndoSnapshot();
+    normalized.splice(oi, 1);
+    emp.Urlaub_perioden = normalized;
+  }
+  syncLegacyAbsenceFields(emp);
+  getState().employees[idx] = emp;
+  await syncEmployeesThenPersist();
+  closeUrlaubGanttBlockModal();
+  refreshAllDataViews();
 }
 
 export function setupUrlaubGanttBlockModal() {
@@ -601,6 +670,7 @@ export function setupUrlaubGanttBlockModal() {
 
   const form = /** @type {HTMLFormElement | null} */ ($("#urlaub-gantt-block-form"));
   const cancel = /** @type {HTMLButtonElement | null} */ ($("#urlaub-gantt-block-cancel"));
+  const delBtn = /** @type {HTMLButtonElement | null} */ ($("#urlaub-gantt-block-delete"));
   const bd = /** @type {HTMLElement | null} */ ($("#urlaub-gantt-block-backdrop"));
   if (!form || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
@@ -612,6 +682,9 @@ export function setupUrlaubGanttBlockModal() {
     $("#urlaub-gantt-block-bis")?.addEventListener("change", syncUrlaubGanttHalberTagWrapVisibility);
   }
   cancel?.addEventListener("click", closeUrlaubGanttBlockModal);
+  delBtn?.addEventListener("click", () => {
+    void deleteUrlaubGanttBlockPeriod();
+  });
   bd?.addEventListener("click", (e) => {
     if (e.target === bd) closeUrlaubGanttBlockModal();
   });
