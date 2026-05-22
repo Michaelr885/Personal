@@ -289,17 +289,20 @@ export function renderUrlaubPlan() {
     const titleParts = [titleBase];
     if (hName) titleParts.push(hName);
     if (betriebFrei) titleParts.push(betriebFrei);
+    if (isToday) titleParts.push("Heute");
     const title = titleParts.join(" · ");
     const cls = [
       "urlaub-plan__head-col",
       isWe ? "urlaub-plan__head-col--we" : "",
       hName ? "urlaub-plan__head-col--holiday" : "",
       betriebFrei ? "urlaub-plan__head-col--betrieb" : "",
+      isToday ? "urlaub-plan__head-col--today" : "",
     ]
       .filter(Boolean)
       .join(" ");
+    const todayAttr = isToday ? ' aria-current="date"' : "";
     headCells.push(
-      `<div class="${cls}" title="${escapeHtml(title)}"><span class="urlaub-plan__head-day">${d}</span><span class="urlaub-plan__head-dow">${escapeHtml(
+      `<div class="${cls}"${todayAttr} title="${escapeHtml(title)}"><span class="urlaub-plan__head-day">${d}</span><span class="urlaub-plan__head-dow">${escapeHtml(
         shortD
       )}</span></div>`
     );
@@ -308,6 +311,7 @@ export function renderUrlaubPlan() {
       isWe ? "urlaub-plan__colbg--we" : "",
       hName ? "urlaub-plan__colbg--holiday" : "",
       betriebFrei ? "urlaub-plan__colbg--betrieb" : "",
+      isToday ? "urlaub-plan__colbg--today" : "",
     ]
       .filter(Boolean)
       .join(" ");

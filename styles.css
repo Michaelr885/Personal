@@ -1970,6 +1970,19 @@ textarea {
   color: #115e59;
 }
 
+/* Heutiger Tag im Monatsraster (nur wenn der angezeigte Monat „heute“ enthält) */
+.urlaub-plan__colbg--today {
+  box-shadow: inset 0 0 0 9999px rgba(254, 202, 202, 0.42);
+}
+
+.urlaub-plan__head-col--today {
+  box-shadow: inset 0 0 0 9999px rgba(254, 202, 202, 0.5);
+}
+
+.urlaub-plan__head-col--today .urlaub-plan__head-day {
+  color: #b91c1c;
+}
+
 .urlaub-plan__head-day {
   display: block;
   font-weight: 700;
