@@ -2531,6 +2531,18 @@ textarea {
   color: #99f6e4;
 }
 
+:root[data-theme="dark"] .urlaub-plan__colbg--today {
+  box-shadow: inset 0 0 0 9999px rgba(248, 113, 113, 0.22);
+}
+
+:root[data-theme="dark"] .urlaub-plan__head-col--today {
+  box-shadow: inset 0 0 0 9999px rgba(248, 113, 113, 0.28);
+}
+
+:root[data-theme="dark"] .urlaub-plan__head-col--today .urlaub-plan__head-day {
+  color: #fca5a5;
+}
+
 :root[data-theme="dark"] .urlaub-plan__row:hover {
   background: rgba(96, 165, 250, 0.08);
 }
