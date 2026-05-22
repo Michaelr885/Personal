@@ -149,6 +149,7 @@ export function normalizeAllEmployeesShape() {
     if (emp.Urlaub_halber_Tag === true && !isSingleCalendarDayUrlaub(String(emp.Urlaub_ab ?? "").trim(), emp.Urlaub_bis)) {
       emp.Urlaub_halber_Tag = false;
     }
+    dedupeUrlaubStorage(emp);
   }
   ensureStateQualifications();
   ensureDashboardAbteilungReihenfolge();
@@ -228,13 +229,22 @@ export function syncLegacyAbsenceFields(/** @type {Employee} */ emp) {
 export function getUrlaubRanges(emp) {
   /** @type {{ ab: string; bis: string | null }[]} */
   const ranges = [];
+  let hauptAb = null;
+  let hauptBis = null;
   if (emp.Urlaub_ab != null && emp.Urlaub_ab !== "") {
-    const bis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
-    ranges.push({ ab: String(emp.Urlaub_ab), bis });
+    hauptAb = String(emp.Urlaub_ab);
+    hauptBis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+    ranges.push({ ab: hauptAb, bis: hauptBis });
   }
-  for (const p of emp.Urlaub_perioden || []) {
-    if (!p || !p.von) continue;
+  /** @type {Set<string>} */
+  const seen = new Set();
+  if (hauptAb) seen.add(`${hauptAb}|${bisNormUrlaub(hauptBis) ?? ""}`);
+  for (const p of normalizeUrlaubPerioden(emp.Urlaub_perioden)) {
     const bis = p.bis != null && p.bis !== "" ? String(p.bis) : null;
+    if (hauptAb && sameUrlaubSpan(hauptAb, hauptBis, p.von, bis)) continue;
+    const key = `${p.von}|${bisNormUrlaub(bis) ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     ranges.push({ ab: String(p.von), bis });
   }
   return ranges;
@@ -246,17 +256,27 @@ export function getUrlaubRanges(emp) {
  * @returns {{ ab: string; bis: string | null; halberTag: boolean; slot: "haupt" | "zusatz" }[]}
  */
 export function getUrlaubRangeEntries(emp) {
-  /** @type {{ ab: string; bis: string | null; halberTag: boolean; slot: "haupt" | "zusatz" }[]} */
+  /** @type {{ ab: string; bis: string | null; halferTag: boolean; slot: "haupt" | "zusatz" }[]} */
   const out = [];
+  let hauptAb = null;
+  let hauptBis = null;
   if (emp.Urlaub_ab != null && emp.Urlaub_ab !== "") {
-    const bis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
-    const halberTag = emp.Urlaub_halber_Tag === true && isSingleCalendarDayUrlaub(String(emp.Urlaub_ab), bis);
-    out.push({ ab: String(emp.Urlaub_ab), bis, halberTag, slot: "haupt" });
+    hauptAb = String(emp.Urlaub_ab);
+    hauptBis = emp.Urlaub_bis != null && emp.Urlaub_bis !== "" ? String(emp.Urlaub_bis) : null;
+    const halberTag = emp.Urlaub_halber_Tag === true && isSingleCalendarDayUrlaub(hauptAb, hauptBis);
+    out.push({ ab: hauptAb, bis: hauptBis, halberTag, slot: "haupt" });
   }
+  /** @type {Set<string>} */
+  const seen = new Set();
+  if (hauptAb) seen.add(`${hauptAb}|${bisNormUrlaub(hauptBis) ?? ""}`);
   for (const p of normalizeUrlaubPerioden(emp.Urlaub_perioden)) {
     const bis = p.bis != null && p.bis !== "" ? String(p.bis) : null;
+    if (hauptAb && sameUrlaubSpan(hauptAb, hauptBis, p.von, bis)) continue;
+    const key = `${p.von}|${bisNormUrlaub(bis) ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const halberTag = !!p.Halber_Tag && isSingleCalendarDayUrlaub(p.von, bis);
-    out.push({ ab: String(p.von), bis, halberTag, slot: "zusatz" });
+    out.push({ ab: String(p.von), bis, halferTag, slot: "zusatz" });
   }
   return out;
 }
@@ -281,6 +301,48 @@ export function sameUrlaubSpan(
  * @param {{ slot: "haupt" | "zusatz"; von: string; bis: string | null } | null} exclude bestehender Eintrag, der beim Speichern ersetzt wird
  * @returns {string|null} Fehlertext oder null
  */
+
+/**
+ * Entfernt doppelte Urlaub_perioden (gleicher Zeitraum wie Haupt-Urlaub oder mehrfach in der Liste).
+ * @param {Employee} emp
+ */
+export function dedupeUrlaubStorage(emp) {
+  const hAb = emp.Urlaub_ab != null && emp.Urlaub_ab !== "" ? String(emp.Urlaub_ab) : null;
+  const hBis = bisNormUrlaub(emp.Urlaub_bis);
+  let periods = normalizeUrlaubPerioden(emp.Urlaub_perioden);
+  if (hAb) {
+    periods = periods.filter((p) => !sameUrlaubSpan(hAb, hBis, p.von, p.bis));
+  }
+  /** @type {Urlaubsperiode[]} */
+  const unique = [];
+  for (const p of periods) {
+    if (unique.some((u) => sameUrlaubSpan(u.von, u.bis, p.von, p.bis))) continue;
+    unique.push(p);
+  }
+  emp.Urlaub_perioden = unique;
+}
+
+/**
+ * Entfernt einen Urlaubszeitraum überall (Hauptfelder und passende Zusatzeinträge).
+ * @param {Employee} emp
+ * @param {string} von
+ * @param {string|null} bis
+ */
+export function removeUrlaubSpan(emp, von, bis) {
+  if (
+    emp.Urlaub_ab != null &&
+    emp.Urlaub_ab !== "" &&
+    sameUrlaubSpan(String(emp.Urlaub_ab), emp.Urlaub_bis, von, bis)
+  ) {
+    emp.Urlaub_ab = null;
+    emp.Urlaub_bis = null;
+    emp.Urlaub_halber_Tag = false;
+  }
+  emp.Urlaub_perioden = normalizeUrlaubPerioden(emp.Urlaub_perioden).filter(
+    (p) => !sameUrlaubSpan(p.von, p.bis, von, bis)
+  );
+}
+
 export function urlaubDuplicateAgainst(emp, von, bis, exclude) {
   const bN = bisNormUrlaub(bis);
   if (emp.Urlaub_ab) {

@@ -81,6 +81,7 @@ import {
   uniqueQualifications,
   ensureStateQualifications,
   syncLegacyAbsenceFields,
+  dedupeUrlaubStorage,
   ABTEILUNGEN,
   normalizeBeschäftigung,
   fillProjectLeiterSelect,
@@ -781,6 +782,7 @@ export function setupPersonnelInteractions() {
     if (idx >= 0) {
       recordUndoSnapshot();
       const merged = /** @type {Employee} */ ({ ...getState().employees[idx], ...payload });
+      dedupeUrlaubStorage(merged);
       syncLegacyAbsenceFields(merged);
       getState().employees[idx] = merged;
       await syncEmployeesThenPersist();
@@ -859,6 +861,7 @@ export function setupPersonnelInteractions() {
       Abwesenheit_geplant_ab: null,
       Abwesenheit_geplant_bis: null,
     });
+    dedupeUrlaubStorage(newEmp);
     syncLegacyAbsenceFields(newEmp);
     recordUndoSnapshot();
     getState().employees.push(newEmp);

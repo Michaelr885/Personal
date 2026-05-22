@@ -80,8 +80,11 @@ import {
   uniqueQualifications,
   getUrlaubRangeEntries,
   bisNormUrlaub,
+  sameUrlaubSpan,
   urlaubDuplicateAgainst,
   syncLegacyAbsenceFields,
+  dedupeUrlaubStorage,
+  removeUrlaubSpan,
   ABTEILUNGEN,
   normalizeBeschäftigung,
   fillProjectLeiterSelect,
@@ -596,36 +599,24 @@ export async function deleteUrlaubGanttBlockPeriod() {
     { confirmText: "Löschen", cancelText: "Abbrechen", confirmDanger: true }
   );
   if (!ok) return;
-  if (origSlot === "haupt") {
-    if (String(emp.Urlaub_ab || "") !== origVon || bisNormUrlaub(emp.Urlaub_bis) !== bisNormUrlaub(origBisNull)) {
-      await openModal(
-        "Hinweis",
-        "<div>Der Haupt-Urlaub wurde zwischenzeitlich geändert. Bitte die Ansicht aktualisieren (z. B. Monat wechseln).</div>",
-        { variant: "info", confirmText: "Verstanden" }
-      );
-      return;
-    }
-    recordUndoSnapshot();
-    emp.Urlaub_ab = null;
-    emp.Urlaub_bis = null;
-    emp.Urlaub_halber_Tag = false;
-  } else {
-    const normalized = normalizeUrlaubPerioden(emp.Urlaub_perioden);
-    const oi = normalized.findIndex(
-      (p) => p.von === origVon && bisNormUrlaub(p.bis) === bisNormUrlaub(origBisNull)
+  const stillThere =
+    (emp.Urlaub_ab != null &&
+      emp.Urlaub_ab !== "" &&
+      sameUrlaubSpan(String(emp.Urlaub_ab), emp.Urlaub_bis, origVon, origBisNull)) ||
+    normalizeUrlaubPerioden(emp.Urlaub_perioden).some((p) =>
+      sameUrlaubSpan(p.von, p.bis, origVon, origBisNull)
     );
-    if (oi < 0) {
-      await openModal(
-        "Hinweis",
-        "<div>Dieser Zusatz-Zeitraum wurde zwischenzeitlich entfernt oder geändert.</div>",
-        { variant: "info", confirmText: "Verstanden" }
-      );
-      return;
-    }
-    recordUndoSnapshot();
-    normalized.splice(oi, 1);
-    emp.Urlaub_perioden = normalized;
+  if (!stillThere) {
+    await openModal(
+      "Hinweis",
+      "<div>Dieser Zeitraum wurde zwischenzeitlich entfernt oder geändert.</div>",
+      { variant: "info", confirmText: "Verstanden" }
+    );
+    return;
   }
+  recordUndoSnapshot();
+  removeUrlaubSpan(emp, origVon, origBisNull);
+  dedupeUrlaubStorage(emp);
   syncLegacyAbsenceFields(emp);
   getState().employees[idx] = emp;
   await syncEmployeesThenPersist();
@@ -792,6 +783,7 @@ export function setupUrlaubGanttBlockModal() {
       normalized.push(period);
       emp.Urlaub_perioden = normalized;
     }
+    dedupeUrlaubStorage(emp);
     syncLegacyAbsenceFields(emp);
     getState().employees[idx] = emp;
     await syncEmployeesThenPersist();
