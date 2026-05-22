@@ -276,7 +276,7 @@ export function getUrlaubRangeEntries(emp) {
     if (seen.has(key)) continue;
     seen.add(key);
     const halberTag = !!p.Halber_Tag && isSingleCalendarDayUrlaub(p.von, bis);
-    out.push({ ab: String(p.von), bis, halferTag, slot: "zusatz" });
+    out.push({ ab: String(p.von), bis, halberTag, slot: "zusatz" });
   }
   return out;
 }
