@@ -6,6 +6,8 @@
  * jeder Änderung den kompletten JSON-Inhalt — siehe auch state.js → persist().
  */
 
+import { ABTEILUNGEN } from "./employees.js";
+
 /** @type {FileSystemFileHandle | null} */
 let dataFileHandle = null;
 
@@ -346,10 +348,9 @@ function normalizeDataset(raw) {
     }
   }
 
-  const ABTL = ["Mechanik", "Steriltechnik", "Kunststofftechnik und Gewerbe", "Rohrfertigung"];
   const normTLAbt = (raw) => {
     const s = String(raw ?? "").trim();
-    return ABTL.includes(s) ? s : ABTL[0];
+    return ABTEILUNGEN.includes(s) ? s : ABTEILUNGEN[0];
   };
   for (let i = 0; i < team_leaders.length; i++) {
     const row = team_leaders[i];
@@ -383,12 +384,43 @@ export function isFileSystemAccessSupported() {
   return typeof window !== "undefined" && "showOpenFilePicker" in window;
 }
 
+let fallbackFileName = "";
+
+export function setFallbackFileName(name) {
+  fallbackFileName = name;
+}
+
 export function hasLinkedDataFile() {
-  return !!dataFileHandle;
+  return !!dataFileHandle || !!fallbackFileName;
 }
 
 export function getLinkedFileName() {
-  return dataFileHandle?.name ?? "";
+  return dataFileHandle?.name || fallbackFileName || "";
+}
+
+export function parseAndNormalizeText(text) {
+  if (!text.trim()) {
+    return createMockDataset();
+  }
+  try {
+    const parsed = JSON.parse(text);
+    const normalized = normalizeDataset(parsed);
+    return normalized || createMockDataset();
+  } catch {
+    return createMockDataset();
+  }
+}
+
+export function downloadDataAsFile(data, filename = "daten.json") {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /**

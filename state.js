@@ -10,6 +10,7 @@ import {
   linkLocalDataFile,
   saveDataToFile,
   getLinkedFileName,
+  isFileSystemAccessSupported,
 } from "./fileHandler.js";
 import { $ } from "./utils.js";
 import { normalizeAllEmployeesShape } from "./employees.js";
@@ -183,6 +184,19 @@ export async function persist() {
   if (isPlanningMode) {
     if (meta) {
       meta.textContent = `Aktiv: ${getLinkedFileName()} · Planungsmodus – noch nicht auf die Festplatte geschrieben`;
+    }
+    return;
+  }
+  if (!isFileSystemAccessSupported()) {
+    try {
+      localStorage.setItem("app_fallback_data", JSON.stringify(state));
+      localStorage.setItem("app_fallback_filename", getLinkedFileName() || "daten.json");
+      meta.textContent = `Aktiv: ${getLinkedFileName()} · im Browser gespeichert · Bitte herunterladen!`;
+      const dlBtn = document.querySelector("#btn-download-fallback");
+      if (dlBtn) dlBtn.removeAttribute("hidden");
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = "Fehler beim Speichern im Browser: " + String(e);
     }
     return;
   }

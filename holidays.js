@@ -123,7 +123,7 @@ export function feierlandDisplayName(code) {
 
 /** Buß- und Bettag: Mittwoch vor dem 23. November (SN). */
 export function bussUndBettagISO(/** @type {number} */ year) {
-  const d = new Date(year, 10, 23, 12, 0, 0, 0);
+  const d = new Date(year, 10, 22, 12, 0, 0, 0);
   while (d.getDay() !== 3) d.setDate(d.getDate() - 1);
   return toISODateLocal(d);
 }
@@ -210,13 +210,13 @@ export function isLandPublicHolidayISO(iso) {
   return bundeslandHolidayNameDE(iso) != null;
 }
 
-/** 24. und 30. Dezember: betrieblich frei (kein gesetzlicher Feiertag), zählen nicht als Urlaubs-Arbeitstag. */
+/** 24. und 31. Dezember: betrieblich frei (kein gesetzlicher Feiertag), zählen nicht als Urlaubs-Arbeitstag. */
 export function isBetrieblichFreierDezemberTagISO(iso) {
   const key = String(iso).slice(0, 10);
   if (key.length < 10) return false;
   const mm = key.slice(5, 7);
   const dd = key.slice(8, 10);
-  return mm === "12" && (dd === "24" || dd === "30");
+  return mm === "12" && (dd === "24" || dd === "31");
 }
 
 /** @param {string} iso */
@@ -224,7 +224,7 @@ export function betrieblichFreierDezemberTagLabelDE(iso) {
   if (!isBetrieblichFreierDezemberTagISO(iso)) return null;
   return String(iso).slice(8, 10) === "24"
     ? "24. Dezember · betrieblich frei"
-    : "30. Dezember · betrieblich frei";
+    : "31. Dezember · betrieblich frei";
 }
 
 /** Mo–Fr ohne gesetzliche Feiertage des gewählten Bundeslandes und ohne betrieblich freie Dez.-Tage (Urlaubsstatistik). */

@@ -5,14 +5,21 @@
  * ruft die render/setup-Funktionen der View-Module auf. Hier beginnt das Lesen
  * des Codes — die Fachlogik steckt in state.js, employees.js und *View.js.
  */
-import { linkLocalDataFile, isFileSystemAccessSupported, getLinkedFileName } from "./fileHandler.js";
+import {
+  linkLocalDataFile,
+  isFileSystemAccessSupported,
+  getLinkedFileName,
+  parseAndNormalizeText,
+  downloadDataAsFile,
+  setFallbackFileName,
+} from "./fileHandler.js";
 import { $, $all, escapeHtml } from "./utils.js";
 import {
   BUNDESLAND_LIST,
   getFeierlandCode,
   setFeierlandCode,
 } from "./holidays.js";
-import { normalizeAllEmployeesShape, runAutoStatusSyncAndPersist } from "./employees.js";
+import { ABTEILUNGEN, normalizeAllEmployeesShape, runAutoStatusSyncAndPersist } from "./employees.js";
 import {
   getState,
   setState,
@@ -72,6 +79,28 @@ const titles = {
     subtitle: "Monatsraster und Jahresstatistik – Feiertage nach gewähltem Bundesland (Sidebar).",
   },
 };
+
+function populateAllDepartmentDropdowns() {
+  const filterIds = ["#personnel-filter-abteilung", "#urlaub-filter-abteilung"];
+  filterIds.forEach((selId) => {
+    const sel = /** @type {HTMLSelectElement | null} */ ($(selId));
+    if (sel) {
+      sel.innerHTML =
+        '<option value="">Alle</option>' +
+        ABTEILUNGEN.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
+    }
+  });
+
+  const formIds = ["#new-tl-abteilung", "#new-emp-abteilung", "#emp-abteilung", "#teamleader-form-abteilung"];
+  formIds.forEach((selId) => {
+    const sel = /** @type {HTMLSelectElement | null} */ ($(selId));
+    if (sel) {
+      sel.innerHTML = ABTEILUNGEN.map(
+        (a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`
+      ).join("");
+    }
+  });
+}
 
 function applyThemeFromStorage() {
   let theme = "light";
@@ -154,17 +183,28 @@ function setupNavigation() {
 }
 
 function setupFileLinking() {
-  $("#btn-link-file").addEventListener("click", async () => {
+  const fileLinkBtn = $("#btn-link-file");
+  const fallbackInput = /** @type {HTMLInputElement | null} */ ($("#fallback-file-input"));
+  const dlFallbackBtn = $("#btn-download-fallback");
+
+  dlFallbackBtn?.addEventListener("click", () => {
+    const data = getState();
+    if (data) {
+      downloadDataAsFile(data, getLinkedFileName() || "daten.json");
+    }
+  });
+
+  fileLinkBtn.addEventListener("click", async () => {
     const err = /** @type {HTMLParagraphElement} */ ($("#file-error"));
     const meta = /** @type {HTMLParagraphElement} */ ($("#file-meta"));
     err.hidden = true;
     err.textContent = "";
+
     if (!isFileSystemAccessSupported()) {
-      err.hidden = false;
-      err.textContent =
-        "Ihr Browser unterstützt die File System Access API nicht. Bitte Chrome/Edge und http://localhost verwenden.";
+      fallbackInput?.click();
       return;
     }
+
     try {
       const data = await linkLocalDataFile();
       setState(data);
@@ -188,6 +228,42 @@ function setupFileLinking() {
           : String(e);
     }
   });
+
+  fallbackInput?.addEventListener("change", async () => {
+    const err = /** @type {HTMLParagraphElement} */ ($("#file-error"));
+    const meta = /** @type {HTMLParagraphElement} */ ($("#file-meta"));
+    err.hidden = true;
+    err.textContent = "";
+
+    const file = fallbackInput.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setFallbackFileName(file.name);
+      const data = parseAndNormalizeText(text);
+      setState(data);
+      normalizeAllEmployeesShape();
+      clearUndoHistory();
+      resetPlanningSession();
+      await runAutoStatusSyncAndPersist();
+
+      localStorage.setItem("app_fallback_data", JSON.stringify(data));
+      localStorage.setItem("app_fallback_filename", file.name);
+
+      meta.textContent = `Aktiv: ${getLinkedFileName()} · im Browser gespeichert · Bitte herunterladen!`;
+      dlFallbackBtn?.removeAttribute("hidden");
+
+      $("#gate-screen").hidden = true;
+      $("#app-workspace").hidden = false;
+      setNavEnabled(true);
+      switchView("dashboard");
+    } catch (e) {
+      err.hidden = false;
+      err.textContent = "Fehler beim Lesen der Datei: " + String(e);
+    }
+    fallbackInput.value = "";
+  });
 }
 
 function boot() {
@@ -209,6 +285,7 @@ function boot() {
     }
   });
 
+  populateAllDepartmentDropdowns();
   initAppPreferences();
   setupNavigation();
   setupPlanningModeControls();
@@ -227,6 +304,29 @@ function boot() {
   setupAutoEmployeeStatusSync();
   setupHistoryKeyboard();
   setNavEnabled(false);
+
+  try {
+    const cachedData = localStorage.getItem("app_fallback_data");
+    const cachedFilename = localStorage.getItem("app_fallback_filename");
+    if (cachedData && cachedFilename) {
+      const parsed = JSON.parse(cachedData);
+      setFallbackFileName(cachedFilename);
+      setState(parsed);
+      normalizeAllEmployeesShape();
+      const meta = /** @type {HTMLParagraphElement} */ ($("#file-meta"));
+      if (meta) {
+        meta.textContent = `Aktiv: ${cachedFilename} · aus Browser-Speicher geladen · Bitte herunterladen!`;
+      }
+      const dlBtn = $("#btn-download-fallback");
+      if (dlBtn) dlBtn.removeAttribute("hidden");
+      $("#gate-screen").hidden = true;
+      $("#app-workspace").hidden = false;
+      setNavEnabled(true);
+      switchView("dashboard");
+    }
+  } catch (e) {
+    console.warn("Konnte Fallback-Sitzung nicht laden:", e);
+  }
 }
 
 function startApp() {

@@ -30,6 +30,11 @@
             <i class="fa-solid fa-file-arrow-up"></i>
             Datei laden / verknüpfen
           </button>
+          <input type="file" id="fallback-file-input" accept=".json" style="display: none;" />
+          <button type="button" class="btn btn--sidebar-secondary" id="btn-download-fallback" style="margin-top: 0.5rem; justify-content: center;" hidden>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            Datei herunterladen
+          </button>
           <p class="sidebar__file-meta" id="file-meta">
             Keine <code>daten.json</code> aktiv. Änderungen werden nach der Verknüpfung
             automatisch gespeichert.
@@ -318,12 +323,7 @@
                 </label>
                 <label>
                   Abteilung
-                  <select id="new-tl-abteilung" required>
-                    <option>Mechanik</option>
-                    <option>Steriltechnik</option>
-                    <option>Kunststofftechnik und Gewerbe</option>
-                    <option>Rohrfertigung</option>
-                  </select>
+                  <select id="new-tl-abteilung" required></select>
                 </label>
                 <label>
                   Team-Farbe (Dashboard)
@@ -376,13 +376,7 @@
                   </label>
                   <label class="field-inline">
                     <span>Abteilung</span>
-                    <select id="personnel-filter-abteilung">
-                      <option value="">Alle</option>
-                      <option>Mechanik</option>
-                      <option>Steriltechnik</option>
-                      <option>Kunststofftechnik und Gewerbe</option>
-                      <option>Rohrfertigung</option>
-                    </select>
+                    <select id="personnel-filter-abteilung"></select>
                   </label>
                 </div>
               </div>
@@ -441,12 +435,7 @@
                 </label>
                 <label>
                   Abteilung
-                  <select id="new-emp-abteilung" required>
-                    <option>Mechanik</option>
-                    <option>Steriltechnik</option>
-                    <option>Kunststofftechnik und Gewerbe</option>
-                    <option>Rohrfertigung</option>
-                  </select>
+                  <select id="new-emp-abteilung" required></select>
                 </label>
                 <label>
                   Teamleitung (optional)
@@ -560,12 +549,7 @@
                 </label>
                 <label>
                   Abteilung
-                  <select id="emp-abteilung" required>
-                    <option>Mechanik</option>
-                    <option>Steriltechnik</option>
-                    <option>Kunststofftechnik und Gewerbe</option>
-                    <option>Rohrfertigung</option>
-                  </select>
+                  <select id="emp-abteilung" required></select>
                 </label>
                 <label class="span-2">
                   Zusatz-Tags (Komma-getrennt)
@@ -681,13 +665,7 @@
                 </label>
                 <label class="field-inline">
                   <span>Abteilung</span>
-                  <select id="urlaub-filter-abteilung">
-                    <option value="">Alle</option>
-                    <option>Mechanik</option>
-                    <option>Steriltechnik</option>
-                    <option>Kunststofftechnik und Gewerbe</option>
-                    <option>Rohrfertigung</option>
-                  </select>
+                  <select id="urlaub-filter-abteilung"></select>
                 </label>
                 <label class="field-inline">
                   <span>AÜG/Eigene</span>
@@ -954,12 +932,7 @@
           </label>
           <label>
             Abteilung
-            <select id="teamleader-form-abteilung" required>
-              <option>Mechanik</option>
-              <option>Steriltechnik</option>
-              <option>Kunststofftechnik und Gewerbe</option>
-              <option>Rohrfertigung</option>
-            </select>
+            <select id="teamleader-form-abteilung" required></select>
           </label>
           <label>
             Team-Farbe (Dashboard)
